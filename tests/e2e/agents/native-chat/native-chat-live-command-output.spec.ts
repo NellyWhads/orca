@@ -52,6 +52,7 @@ async function send(page: Page, composer: Locator, sendButton: Locator, text: st
 
 test.describe('live command output', () => {
   test.skip(!SUPPORTED, 'the Claude stub wrapper is POSIX-only')
+  // Each test streams real output for 10-25 s on top of a cold app start.
   test.setTimeout(180_000)
 
   test('a background command opens into a live, read-only view', async ({
@@ -140,14 +141,15 @@ test.describe('live command output', () => {
     const appearedAfterMs = Date.now() - sentAt
     await shot(page, '10-tail-appears')
 
-    // Stick to bottom while the tail grows.
-    for (let sample = 0; sample < 4; sample++) {
-      await page.waitForTimeout(800)
-      const gap = await scroller.evaluate(
+    // Stick to bottom while the tail grows: still pinned once it has grown, and again later.
+    const gapFromBottom = () =>
+      scroller.evaluate(
         (element) => element.scrollHeight - element.scrollTop - element.clientHeight
       )
-      expect(gap, `distance from bottom at sample ${sample}`).toBeLessThan(4)
-    }
+    await expect.poll(() => terminalText(tail), { timeout: 30_000 }).toContain('shard 1 step 3')
+    expect(await gapFromBottom()).toBeLessThan(4)
+    await expect.poll(() => terminalText(tail), { timeout: 30_000 }).toContain('shard 1 step 8')
+    expect(await gapFromBottom()).toBeLessThan(4)
     await shot(page, '11-tail-growing')
 
     await expect(chat.getByText('All commands finished.')).toBeVisible({ timeout: 60_000 })
@@ -166,8 +168,8 @@ test.describe('live command output', () => {
     // History above, so the running row can leave the list's window.
     for (let turn = 0; turn < 12; turn++) {
       await send(page, composer, sendButton, `history ${turn} ${'words '.repeat(60)}`)
-      // Older replies leave the virtualised list, so wait on the turn's end rather than its reply.
-      await page.waitForTimeout(300)
+      // Older replies leave the virtualised list, so wait on the turn's own message, then its end.
+      await expect(chat.getByText(`history ${turn} words`).first()).toBeVisible({ timeout: 30_000 })
       await expect(stop).toHaveCount(0, { timeout: 30_000 })
     }
     await send(page, composer, sendButton, 'shell-task:foreground')
@@ -181,8 +183,8 @@ test.describe('live command output', () => {
     await shot(page, '20-before-scroll-away')
 
     await scroller.evaluate((element) => element.scrollTo({ top: 0 }))
-    await page.waitForTimeout(1500)
-    const mountedWhileAway = await tail.count()
+    // Far enough that the list unmounts the running row: the remount is what this test is about.
+    await expect(tail).toHaveCount(0, { timeout: 15_000 })
     await shot(page, '21-scrolled-away')
     await scroller.evaluate((element) => element.scrollTo({ top: element.scrollHeight }))
     await expect(tail).toBeVisible()
@@ -194,10 +196,6 @@ test.describe('live command output', () => {
     expect(after.height).toBe(before.height)
     // Earlier output is still shown, not restarted from an empty terminal.
     expect(after.text).toContain('shard 1 step 1')
-    test.info().annotations.push({
-      type: 'tail-mounted-while-scrolled-away',
-      description: String(mountedWhileAway)
-    })
   })
 
   test('more than three concurrent commands keep three terminals and offer the rest', async ({
