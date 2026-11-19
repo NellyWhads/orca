@@ -50,9 +50,15 @@ export function NativeChatCommandOutputProvider({
   children: React.ReactNode
 }): React.JSX.Element {
   const readable = useMemo(() => readableCommands(tasks, settledTasks), [tasks, settledTasks])
+  // Keyed by value: a caller that rebuilds the target must not re-render every row that reads this.
+  const environmentId = target.kind === 'environment' ? target.environmentId : null
+  const stableTarget = useMemo<RuntimeClientTarget>(
+    () => (environmentId === null ? { kind: 'local' } : { kind: 'environment', environmentId }),
+    [environmentId]
+  )
   const scope = useMemo<NativeChatCommandOutputScope>(
     () => ({
-      target,
+      target: stableTarget,
       sessionId,
       paneKey,
       readable,
@@ -63,7 +69,7 @@ export function NativeChatCommandOutputProvider({
           returnTo: currentNativeChatSubagent(paneKey)
         })
     }),
-    [paneKey, readable, sessionId, target]
+    [paneKey, readable, sessionId, stableTarget]
   )
   return <NativeChatCommandOutputContext value={scope}>{children}</NativeChatCommandOutputContext>
 }

@@ -1,4 +1,4 @@
-import { appendFile, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
+import { appendFile, link, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -109,6 +109,11 @@ describe('ClaudeCommandOutputLocator', () => {
       toolResult('toolu_bg2', `Output is being written to: ${evil}.`, { backgroundTaskId: 'bg2' })
     )
     expect(await subject.read({ taskId: 'bg2' }, 0)).toEqual({ status: 'pending' })
+
+    // Nor can a second name inside the root for a file outside it.
+    await link(evil, join(tasksDir, 'bg4.output'))
+    subject.observe(started('bg4', 'toolu_bg4', true))
+    expect(await subject.read({ taskId: 'bg4' }, 0)).toEqual({ status: 'pending' })
     expect(subject.readableTaskIds().size).toBe(0)
   })
 

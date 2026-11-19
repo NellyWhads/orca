@@ -106,25 +106,54 @@ function isInside(root: string, path: string): boolean {
   return path.startsWith(root.endsWith(sep) ? root : `${root}${sep}`)
 }
 
-/** The candidate, if it is a regular file (not a link) whose real path stays inside the tmp root. */
+/** A verified output file: its real path and the identity every later open must still match. */
+export type ClaudeTaskOutputFile = { path: string; dev: number; ino: number }
+
+/** The candidate, if it is a lone regular file (not a link, one name) whose real path stays inside the tmp root. */
 export async function verifiedClaudeTaskOutputFile(
   root: string,
   candidate: string,
   taskId: string
-): Promise<string | null> {
+): Promise<ClaudeTaskOutputFile | null> {
   if (!isClaudeTaskOutputPathShape(candidate, taskId)) {
     return null
   }
   try {
     const stats = await lstat(candidate)
-    if (!stats.isFile()) {
+    // A second hard link could be a name for a file outside the root.
+    if (!stats.isFile() || stats.nlink !== 1) {
       return null
     }
     const real = await realpath(candidate)
-    return isInside(root, real) && basename(real) === `${taskId}.output` ? real : null
+    return isInside(root, real) && basename(real) === `${taskId}.output`
+      ? { path: real, dev: stats.dev, ino: stats.ino }
+      : null
   } catch {
     return null
   }
+}
+
+/** The first candidate that verifies, else the first computed folder's file that does. */
+export async function findClaudeTaskOutputFile(input: {
+  root: string
+  taskId: string
+  candidates: readonly string[]
+  computedDirs: () => Promise<string[]>
+}): Promise<ClaudeTaskOutputFile | null> {
+  const { root, taskId } = input
+  for (const candidate of input.candidates) {
+    const file = await verifiedClaudeTaskOutputFile(root, candidate, taskId)
+    if (file) {
+      return file
+    }
+  }
+  for (const dir of await input.computedDirs()) {
+    const file = await verifiedClaudeTaskOutputFile(root, join(dir, `${taskId}.output`), taskId)
+    if (file) {
+      return file
+    }
+  }
+  return null
 }
 
 /** The folder's real path when it stays inside the tmp root. */

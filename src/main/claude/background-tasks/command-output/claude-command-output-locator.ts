@@ -13,14 +13,17 @@ import {
   isClaudeCommandOutputId,
   isClaudeTaskDirShape,
   isClaudeTaskOutputPathShape,
+  findClaudeTaskOutputFile,
   verifiedClaudeTaskDir,
-  verifiedClaudeTaskOutputFile
+  type ClaudeTaskOutputFile
 } from './claude-command-output-paths'
 import { readClaudeCommandOutputChunk } from './claude-command-output-chunk'
 import { launchMessagePath, toolResultIds, toolResultTexts } from './claude-command-output-frames'
 
 const MAX_TRACKED_COMMANDS = 256
 const MAX_LEARNED_DIRS = 4
+// A background file normally exists by task start; these cover a slow first write, then give up.
+const RESOLVE_RETRY_MS = [500, 1000, 2000, 4000, 8000]
 
 type TrackedCommand = {
   taskId: string
@@ -29,7 +32,11 @@ type TrackedCommand = {
   ended: boolean
   /** From structured evidence only; still verified before use. */
   exactPath?: string
-  resolved?: string
+  resolved?: ClaudeTaskOutputFile
+  /** The verified file was replaced: the next read restarts the client from the top. */
+  restart?: true
+  /** Background lookups retried while the file has not appeared; bounded. */
+  retries?: number
 }
 
 export type ClaudeCommandOutputLocatorOptions = {
@@ -88,17 +95,37 @@ export class ClaudeCommandOutputLocator {
       // A foreground command announces its task a few seconds in; until then, keep asking.
       return 'toolUseId' in target ? { status: 'pending' } : { status: 'unavailable' }
     }
+    // Read the end before the bytes: an end seen only after the read may have brought a final write
+    // this read missed, so the client must ask once more.
+    const endedBefore = command.ended
     const ended = { status: 'output', text: '', offset, ended: true, more: false } as const
-    const path = command.resolved ?? (await this.resolve(command))
-    if (!path) {
-      return command.ended ? ended : { status: 'pending' }
+    const file = command.resolved ?? (await this.resolve(command))
+    if (!file) {
+      return endedBefore ? ended : { status: 'pending' }
     }
-    const chunk = await readClaudeCommandOutputChunk(path, offset)
+    const restart = command.restart === true
+    const chunk = await readClaudeCommandOutputChunk(file, restart ? 0 : offset)
+    if (chunk === 'replaced') {
+      // Another file now holds the name: verify it afresh, and restart the client from its top.
+      if (command.resolved === file) {
+        command.resolved = undefined
+        command.restart = true
+      }
+      return { status: 'pending' }
+    }
     if (!chunk) {
       // A foreground command's file is deleted as it ends; the end frame follows.
-      return command.ended ? ended : { status: 'pending' }
+      return endedBefore ? ended : { status: 'pending' }
     }
-    return { status: 'output', ...chunk, ended: command.ended }
+    if (restart) {
+      command.restart = undefined
+    }
+    return {
+      status: 'output',
+      ...chunk,
+      ...(restart ? { reset: true as const } : {}),
+      ended: endedBefore
+    }
   }
 
   private observeSystem(message: Record<string, unknown>): void {
@@ -205,11 +232,20 @@ export class ClaudeCommandOutputLocator {
   }
 
   private root(): Promise<string | null> {
-    this.rootPromise ??= claudeCommandOutputRoot({
-      ...(this.options.tmpDir ? { tmpDir: this.options.tmpDir } : {}),
-      ...(this.options.platform ? { platform: this.options.platform } : {}),
-      ...(this.options.uid !== undefined ? { uid: this.options.uid } : {})
-    })
+    if (!this.rootPromise) {
+      const lookup = claudeCommandOutputRoot({
+        ...(this.options.tmpDir ? { tmpDir: this.options.tmpDir } : {}),
+        ...(this.options.platform ? { platform: this.options.platform } : {}),
+        ...(this.options.uid !== undefined ? { uid: this.options.uid } : {})
+      }).then((root) => {
+        // Claude creates the folder on first use; a miss now must not turn live output off for good.
+        if (root === null && this.rootPromise === lookup) {
+          this.rootPromise = null
+        }
+        return root
+      })
+      this.rootPromise = lookup
+    }
     return this.rootPromise
   }
 
@@ -225,45 +261,30 @@ export class ClaudeCommandOutputLocator {
     })
   }
 
-  private async resolve(command: TrackedCommand): Promise<string | null> {
+  private async resolve(command: TrackedCommand): Promise<ClaudeTaskOutputFile | null> {
     const generation = this.generation
     const root = await this.root()
-    if (!root) {
+    const file = root
+      ? await findClaudeTaskOutputFile({
+          root,
+          taskId: command.taskId,
+          candidates: [
+            ...(command.exactPath ? [command.exactPath] : []),
+            ...this.learnedDirs.map((dir) => join(dir, `${command.taskId}.output`))
+          ],
+          computedDirs: () =>
+            computedClaudeTaskDirs(root, this.options.cwd, this.options.providerSessionId())
+        })
+      : null
+    if (generation !== this.generation || this.commands.get(command.taskId) !== command) {
+      return file
+    }
+    if (!file) {
+      this.retryResolve(command)
       return null
     }
-    const candidates = [
-      ...(command.exactPath ? [command.exactPath] : []),
-      ...this.learnedDirs.map((dir) => join(dir, `${command.taskId}.output`))
-    ]
-    let path: string | null = null
-    for (const candidate of candidates) {
-      path = await verifiedClaudeTaskOutputFile(root, candidate, command.taskId)
-      if (path) {
-        break
-      }
-    }
-    if (!path) {
-      const dirs = await computedClaudeTaskDirs(
-        root,
-        this.options.cwd,
-        this.options.providerSessionId()
-      )
-      for (const dir of dirs) {
-        path = await verifiedClaudeTaskOutputFile(
-          root,
-          join(dir, `${command.taskId}.output`),
-          command.taskId
-        )
-        if (path) {
-          break
-        }
-      }
-    }
-    if (!path || generation !== this.generation || this.commands.get(command.taskId) !== command) {
-      return path
-    }
-    command.resolved = path
-    const dir = dirname(path)
+    command.resolved = file
+    const dir = dirname(file.path)
     if (!this.learnedDirs.includes(dir)) {
       this.learnedDirs.unshift(dir)
       this.learnedDirs.length = Math.min(this.learnedDirs.length, MAX_LEARNED_DIRS)
@@ -272,6 +293,21 @@ export class ClaudeCommandOutputLocator {
       this.readable.add(command.taskId)
       this.options.onReadableChanged?.()
     }
-    return path
+    return file
+  }
+
+  /** Only background rows need this: nothing polls a task until the roster says it is readable. */
+  private retryResolve(command: TrackedCommand): void {
+    const attempt = command.retries ?? 0
+    if (!command.backgrounded || command.ended || attempt >= RESOLVE_RETRY_MS.length) {
+      return
+    }
+    command.retries = attempt + 1
+    const generation = this.generation
+    setTimeout(() => {
+      if (generation === this.generation && this.commands.get(command.taskId) === command) {
+        void this.resolve(command)
+      }
+    }, RESOLVE_RETRY_MS[attempt]).unref?.()
   }
 }

@@ -1,10 +1,13 @@
 import { open } from 'node:fs/promises'
 import { constants } from 'node:fs'
+import type { ClaudeTaskOutputFile } from './claude-command-output-paths'
 
 /** One read's ceiling, so a fast writer cannot make a single reply large. */
 export const COMMAND_OUTPUT_CHUNK_BYTES = 64 * 1024
 /** A first read of a long file starts this far from its end; older output stays on disk. */
 export const COMMAND_OUTPUT_FIRST_READ_TAIL_BYTES = 1024 * 1024
+/** A reader this far behind a fast writer jumps to the tail instead of replaying the backlog. */
+export const COMMAND_OUTPUT_LAG_SKIP_BYTES = 8 * 1024 * 1024
 
 export type ClaudeCommandOutputChunk = {
   text: string
@@ -37,30 +40,42 @@ function leadingContinuationBytes(bytes: Uint8Array): number {
   return count
 }
 
-/** Null when the file is missing or unreadable; the caller decides what that means. */
+/**
+ * Null when the file is missing or unreadable; `replaced` when the name now holds a different file than the one
+ * verified, which the caller must verify again before reading.
+ */
 export async function readClaudeCommandOutputChunk(
-  path: string,
+  file: ClaudeTaskOutputFile,
   offset: number
-): Promise<ClaudeCommandOutputChunk | null> {
+): Promise<ClaudeCommandOutputChunk | 'replaced' | null> {
   let handle
   try {
-    // O_NOFOLLOW: the path was verified as a regular file; refuse it if it became a link since.
-    handle = await open(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
+    // O_NOFOLLOW refuses a link swapped in for the last name; O_NONBLOCK keeps a swapped-in FIFO from
+    // parking a libuv thread. The identity check after opening covers everything else.
+    handle = await open(
+      file.path,
+      constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0)
+    )
   } catch {
     return null
   }
   try {
     const stats = await handle.stat()
-    if (!stats.isFile()) {
-      return null
+    if (!stats.isFile() || stats.nlink !== 1 || stats.dev !== file.dev || stats.ino !== file.ino) {
+      return 'replaced'
     }
     const size = stats.size
     const reset = offset > size
     let start = reset ? 0 : offset
     let skippedBytes = 0
-    if (start === 0 && size > COMMAND_OUTPUT_FIRST_READ_TAIL_BYTES) {
+    // A first read of a long file, or a reader far behind a fast writer, starts near the end.
+    const backlog = size - start
+    if (
+      (start === 0 && backlog > COMMAND_OUTPUT_FIRST_READ_TAIL_BYTES) ||
+      backlog > COMMAND_OUTPUT_LAG_SKIP_BYTES
+    ) {
+      skippedBytes = backlog - COMMAND_OUTPUT_FIRST_READ_TAIL_BYTES
       start = size - COMMAND_OUTPUT_FIRST_READ_TAIL_BYTES
-      skippedBytes = start
     }
     const length = Math.min(COMMAND_OUTPUT_CHUNK_BYTES, size - start)
     const buffer = Buffer.alloc(Math.max(0, length))

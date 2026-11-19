@@ -41,6 +41,12 @@ async function readChunk(
   }
 }
 
+function formatSkipped(bytes: number): string {
+  return bytes >= 1024 * 1024
+    ? `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+    : `${Math.max(1, Math.round(bytes / 1024))} KB`
+}
+
 type PollProgress = { key: string; offset: number; settled: boolean }
 
 type PollReport = { status?: NativeChatCommandOutputStatus; skippedBytes?: number }
@@ -105,6 +111,9 @@ function startCommandOutputPoll(input: {
     }
     if (result.reset || (result.skippedBytes && progress.offset === 0)) {
       sink.reset()
+    } else if (result.skippedBytes) {
+      // The writer outran the reader: say where output was left out rather than run behind it.
+      sink.write(`\r\n\x1b[2m… ${formatSkipped(result.skippedBytes)} skipped …\x1b[0m\r\n`)
     }
     const grew = result.text.length > 0
     if (grew) {
