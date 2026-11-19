@@ -1,6 +1,4 @@
-// Where Claude Code writes a shell task's output: <tmp root>/<project bucket>/<session id>/tasks/<task id>.output.
-// The layout is internal to Claude Code (measured on 2.1.326), so every route here is checked against the
-// per-user tmp root and a miss means "no live output", never an error.
+// Claude Code's internal <tmp root>/<bucket>/<session>/tasks/<task>.output layout (2.1.326); a miss is "no output".
 
 import { lstat, readdir, realpath } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, sep } from 'node:path'
@@ -21,10 +19,7 @@ export type ClaudeCommandOutputRootInput = {
   uid?: number
 }
 
-/**
- * The real path of `claude-<uid>` under Claude Code's tmp base, or null where the layout is unverified.
- * Why Windows is excluded: Claude Code's Windows tmp base and uid naming were not measured, so we do not guess.
- */
+/** Real path of `claude-<uid>` under Claude Code's tmp base; null on Windows, whose layout was not measured. */
 export async function claudeCommandOutputRoot(
   input: ClaudeCommandOutputRootInput
 ): Promise<string | null> {

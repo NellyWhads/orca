@@ -1,7 +1,4 @@
-// Finds and reads the files Claude Code streams shell output into, for one Claude session.
-// Paths are learned only from harness-structured evidence (a background launch's `backgroundTaskId`, a
-// notification's `output_file`, an Agent launch's `outputFile`), never from a command's own stdout, and every
-// route must stay inside the per-user tmp root. Anything unproven reads as "no live output".
+// Paths come only from harness-structured frames, never a command's stdout, and stay inside the tmp root.
 
 import { dirname, join } from 'node:path'
 import type { AgentSessionReadCommandOutputResult } from '../../../../shared/rpc-contract/native-chat/agent-session-command-output-params'
@@ -35,8 +32,9 @@ type TrackedCommand = {
   resolved?: ClaudeTaskOutputFile
   /** The verified file was replaced: the next read restarts the client from the top. */
   restart?: true
-  /** Background lookups retried while the file has not appeared; bounded. */
+  /** Background lookups retried while the file has not appeared; bounded, one timer at a time. */
   retries?: number
+  retryPending?: true
 }
 
 export type ClaudeCommandOutputLocatorOptions = {
@@ -99,7 +97,7 @@ export class ClaudeCommandOutputLocator {
     // this read missed, so the client must ask once more.
     const endedBefore = command.ended
     const ended = { status: 'output', text: '', offset, ended: true, more: false } as const
-    const file = command.resolved ?? (await this.resolve(command))
+    const file = command.resolved ?? (await this.resolve(command, { retry: false }))
     if (!file) {
       return endedBefore ? ended : { status: 'pending' }
     }
@@ -261,7 +259,11 @@ export class ClaudeCommandOutputLocator {
     })
   }
 
-  private async resolve(command: TrackedCommand): Promise<ClaudeTaskOutputFile | null> {
+  /** `retry: false` for client reads, which come back on their own and must not spend the retry budget. */
+  private async resolve(
+    command: TrackedCommand,
+    { retry }: { retry: boolean } = { retry: true }
+  ): Promise<ClaudeTaskOutputFile | null> {
     const generation = this.generation
     const root = await this.root()
     const file = root
@@ -280,7 +282,9 @@ export class ClaudeCommandOutputLocator {
       return file
     }
     if (!file) {
-      this.retryResolve(command)
+      if (retry) {
+        this.retryResolve(command)
+      }
       return null
     }
     command.resolved = file
@@ -299,12 +303,19 @@ export class ClaudeCommandOutputLocator {
   /** Only background rows need this: nothing polls a task until the roster says it is readable. */
   private retryResolve(command: TrackedCommand): void {
     const attempt = command.retries ?? 0
-    if (!command.backgrounded || command.ended || attempt >= RESOLVE_RETRY_MS.length) {
+    if (
+      !command.backgrounded ||
+      command.ended ||
+      command.retryPending ||
+      attempt >= RESOLVE_RETRY_MS.length
+    ) {
       return
     }
     command.retries = attempt + 1
+    command.retryPending = true
     const generation = this.generation
     setTimeout(() => {
+      command.retryPending = undefined
       if (generation === this.generation && this.commands.get(command.taskId) === command) {
         void this.resolve(command)
       }
