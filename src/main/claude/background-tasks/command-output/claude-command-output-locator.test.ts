@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ClaudeCommandOutputLocator } from './claude-command-output-locator'
 
-const UID = 4242
+const UID = process.getuid?.() ?? 0
 const SESSION = '11111111-2222-4333-8444-555555555555'
 
 let base: string

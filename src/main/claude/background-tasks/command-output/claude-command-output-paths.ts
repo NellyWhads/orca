@@ -34,8 +34,14 @@ export async function claudeCommandOutputRoot(
     return null
   }
   const base = input.tmpDir && isAbsolute(input.tmpDir) ? input.tmpDir : '/tmp'
+  const root = join(base, `claude-${uid}`)
   try {
-    return await realpath(join(base, `claude-${uid}`))
+    // /tmp is shared: trust only a real folder this user owns, as Claude Code creates it.
+    const stats = await lstat(root)
+    if (!stats.isDirectory() || stats.uid !== uid) {
+      return null
+    }
+    return await realpath(root)
   } catch {
     return null
   }

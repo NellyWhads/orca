@@ -7,6 +7,7 @@ import { nativeChatBackgroundTaskRun } from '../../../../../../shared/native-cha
 import { sayBackgroundTaskTranslated } from './background-task-words-text'
 import { KIND_ICONS } from './NativeChatBackgroundTasksStatus'
 import { useNativeChatCommandOutputScope } from '../../commands/native-chat-command-output-context'
+import { NativeChatEventOpenButton } from '../../messages/events/NativeChatEventOpenButton'
 
 export function NativeChatBackgroundTaskRun({
   block
@@ -22,36 +23,29 @@ export function NativeChatBackgroundTaskRun({
   const commandOutput = useNativeChatCommandOutputScope()
   // Only a command whose host streams its output opens; any other row stays plain text.
   const openable = commandOutput?.readable.has(block.taskId) === true
-  const heading = (
-    <>
-      <Icon aria-hidden="true" className="size-3.5 shrink-0 text-chat-foreground-faint" />
-      <AgentStateDot state={row.state} size="sm" title={null} />
-      <span className="min-w-0 truncate text-chat-foreground" title={row.label}>
-        {row.label}
-      </span>
-      <span className="ml-auto shrink-0 font-sans text-xs tabular-nums text-chat-foreground-faint">
-        {row.status}
-      </span>
-    </>
-  )
   return (
     <div className="min-w-0 py-0.5 font-sans text-sm leading-relaxed text-chat-foreground-faint">
-      {openable ? (
-        <button
-          type="button"
-          className="-mx-1 flex min-h-6 w-[calc(100%+0.5rem)] min-w-0 cursor-pointer items-center gap-1.5 rounded-md px-1 text-left hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-          aria-label={t(
-            'components.native-chat.backgroundTasks.openCommandOutput',
-            'Show output of {{value0}}',
-            { value0: row.label }
-          )}
-          onClick={() => commandOutput?.open(block.taskId, row.label)}
-        >
-          {heading}
-        </button>
-      ) : (
-        <div className="flex min-h-6 min-w-0 items-center gap-1.5">{heading}</div>
-      )}
+      <div className="flex min-h-6 min-w-0 items-center gap-1.5">
+        <Icon aria-hidden="true" className="size-3.5 shrink-0 text-chat-foreground-faint" />
+        <AgentStateDot state={row.state} size="sm" title={null} />
+        <span className="min-w-0 truncate text-chat-foreground" title={row.label}>
+          {row.label}
+        </span>
+        <span className="ml-auto shrink-0 font-sans text-xs tabular-nums text-chat-foreground-faint">
+          {row.status}
+        </span>
+        {openable ? (
+          // The same open icon a subagent's status row carries, so an openable row reads as one at rest.
+          <NativeChatEventOpenButton
+            name={t(
+              'components.native-chat.backgroundTasks.openCommandOutput',
+              'Show output of {{value0}}',
+              { value0: row.label }
+            )}
+            onOpen={() => commandOutput?.open(block.taskId, row.label)}
+          />
+        ) : null}
+      </div>
       {row.sentence === null ? null : (
         <p className={cn('mt-0.5 pl-7 text-xs', row.state === 'blocked' && 'text-destructive')}>
           {row.sentence}

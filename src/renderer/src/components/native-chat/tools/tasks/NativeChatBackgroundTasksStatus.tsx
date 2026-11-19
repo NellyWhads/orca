@@ -1,5 +1,13 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
-import { Activity, Bot, ChevronDown, CircleHelp, SquareTerminal, Workflow } from 'lucide-react'
+import {
+  ArrowUpRight,
+  Activity,
+  Bot,
+  ChevronDown,
+  CircleHelp,
+  SquareTerminal,
+  Workflow
+} from 'lucide-react'
 import type { AgentSessionBackgroundTask } from '../../../../../../shared/agent-session/background-tasks/agent-session-background-task-wire'
 import type {
   AgentChildRowContext,
@@ -126,6 +134,10 @@ function BackgroundTaskRow(
         <span className="shrink-0 font-mono text-3xs tabular-nums text-muted-foreground">
           {meta}
         </span>
+      ) : null}
+      {showsCommand && shownId !== undefined ? (
+        // Readable and plain command rows look alike otherwise; the open mark tells them apart at rest.
+        <ArrowUpRight aria-hidden className="size-3 shrink-0 text-muted-foreground" />
       ) : null}
     </>
   )
