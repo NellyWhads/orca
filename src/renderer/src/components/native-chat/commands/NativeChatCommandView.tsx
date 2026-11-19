@@ -47,7 +47,7 @@ export function NativeChatCommandView({
   const terminalRef = useRef<HTMLDivElement>(null)
   const onScreen = useNativeChatOnScreen(frameRef)
   const sink = useNativeChatCommandTerminal(terminalRef, { scrollback: VIEW_SCROLLBACK_ROWS })
-  const { status, skippedBytes } = useNativeChatCommandOutputStream({
+  const { status, skippedBytes, hasOutput } = useNativeChatCommandOutputStream({
     target,
     sessionId,
     subject: { taskId },
@@ -59,6 +59,7 @@ export function NativeChatCommandView({
       label={label}
       status={status}
       skippedBytes={skippedBytes}
+      hasOutput={hasOutput}
       frameRef={frameRef}
       terminalRef={terminalRef}
     />
@@ -70,17 +71,20 @@ export function NativeChatCommandOutputFrame({
   label,
   status,
   skippedBytes,
+  hasOutput,
   frameRef,
   terminalRef
 }: {
   label: string
   status: NativeChatCommandOutputStatus
   skippedBytes: number
+  /** Some output reached the terminal, so an ended command does not claim it printed nothing. */
+  hasOutput: boolean
   frameRef?: React.RefObject<HTMLDivElement | null>
   terminalRef: React.RefObject<HTMLDivElement | null>
 }): React.JSX.Element {
   const t = useTranslate()
-  const notice = useNotice(status, status === 'live' || skippedBytes > 0)
+  const notice = useNotice(status, hasOutput || skippedBytes > 0)
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-chat-pane">
       <div className="shrink-0 border-b border-border/60 px-3 sm:px-4">

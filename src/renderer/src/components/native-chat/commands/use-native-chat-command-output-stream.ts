@@ -47,7 +47,13 @@ function formatSkipped(bytes: number): string {
     : `${Math.max(1, Math.round(bytes / 1024))} KB`
 }
 
-type PollProgress = { key: string; offset: number; settled: boolean }
+/** Where a subject's stream stands; a different terminal (sink) starts it over, since it shows nothing yet. */
+type PollProgress = {
+  key: string
+  sink: NativeChatCommandOutputSink | null
+  offset: number
+  settled: boolean
+}
 
 type PollReport = { status?: NativeChatCommandOutputStatus; skippedBytes?: number }
 
@@ -57,8 +63,11 @@ function startCommandOutputPoll(input: {
   progress: PollProgress
   sink: NativeChatCommandOutputSink
   report: (report: PollReport) => void
+  /** Give up when nothing has announced the command for this long (a call that never ran a task). */
+  pendingTimeoutMs?: number
 }): () => void {
-  const { read, progress, sink, report } = input
+  const { read, progress, sink, report, pendingTimeoutMs } = input
+  const startedAt = Date.now()
   const loop: {
     cancelled: boolean
     timer: ReturnType<typeof setTimeout> | null
@@ -105,6 +114,10 @@ function startCommandOutputPoll(input: {
       return
     }
     if (result.status === 'pending') {
+      if (pendingTimeoutMs !== undefined && Date.now() - startedAt > pendingTimeoutMs) {
+        settle('unavailable')
+        return
+      }
       loop.idleDelay = Math.min(loop.idleDelay * 2, IDLE_MAX_MS)
       schedule(loop.idleDelay)
       return
@@ -157,8 +170,9 @@ export function useNativeChatCommandOutputStream(input: {
   subject: NativeChatCommandOutputSubject
   active: boolean
   sink: NativeChatCommandOutputSink | null
-}): { status: NativeChatCommandOutputStatus; skippedBytes: number } {
-  const { target, sessionId, active, sink } = input
+  pendingTimeoutMs?: number
+}): { status: NativeChatCommandOutputStatus; skippedBytes: number; hasOutput: boolean } {
+  const { target, sessionId, active, sink, pendingTimeoutMs } = input
   const subjectKey =
     'taskId' in input.subject ? `t:${input.subject.taskId}` : `u:${input.subject.toolUseId}`
   // Callers rebuild these objects each render; the loop reads the latest without restarting.
@@ -171,13 +185,16 @@ export function useNativeChatCommandOutputStream(input: {
     key: string
     status: NativeChatCommandOutputStatus
     skippedBytes: number
-  }>({ key: subjectKey, status: 'waiting', skippedBytes: 0 })
+    /** Some output reached the terminal; stays true once the command ends. */
+    hasOutput: boolean
+  }>({ key: subjectKey, status: 'waiting', skippedBytes: 0, hasOutput: false })
   // Survives pauses (scrolled away, pane hidden) so a resumed view continues where it stopped.
-  const progress = useRef<PollProgress>({ key: subjectKey, offset: 0, settled: false })
+  const progress = useRef<PollProgress>({ key: subjectKey, sink: null, offset: 0, settled: false })
 
   useEffect(() => {
-    if (progress.current.key !== subjectKey) {
-      progress.current = { key: subjectKey, offset: 0, settled: false }
+    // A new subject, or a new terminal that shows nothing yet, reads from the top.
+    if (progress.current.key !== subjectKey || (sink && progress.current.sink !== sink)) {
+      progress.current = { key: subjectKey, sink, offset: 0, settled: false }
     }
     const current = progress.current
     if (!active || !sink || current.settled) {
@@ -190,16 +207,21 @@ export function useNativeChatCommandOutputStream(input: {
       },
       progress: current,
       sink,
+      ...(pendingTimeoutMs !== undefined ? { pendingTimeoutMs } : {}),
       report: (report) =>
-        setShown((prior) => ({
-          key: subjectKey,
-          status: report.status ?? (prior.key === subjectKey ? prior.status : 'waiting'),
-          skippedBytes: report.skippedBytes ?? (prior.key === subjectKey ? prior.skippedBytes : 0)
-        }))
+        setShown((prior) => {
+          const same = prior.key === subjectKey
+          return {
+            key: subjectKey,
+            status: report.status ?? (same ? prior.status : 'waiting'),
+            skippedBytes: report.skippedBytes ?? (same ? prior.skippedBytes : 0),
+            hasOutput: report.status === 'live' || (same && prior.hasOutput)
+          }
+        })
     })
-  }, [active, sessionId, sink, subjectKey, targetKey])
+  }, [active, pendingTimeoutMs, sessionId, sink, subjectKey, targetKey])
 
   return shown.key === subjectKey
-    ? { status: shown.status, skippedBytes: shown.skippedBytes }
-    : { status: 'waiting', skippedBytes: 0 }
+    ? { status: shown.status, skippedBytes: shown.skippedBytes, hasOutput: shown.hasOutput }
+    : { status: 'waiting', skippedBytes: 0, hasOutput: false }
 }

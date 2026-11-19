@@ -42,6 +42,7 @@ function Frame({
         label="Build the app for production"
         status={status}
         skippedBytes={skippedBytes}
+        hasOutput={text.length > 0}
         terminalRef={terminalRef}
       />
     </div>
