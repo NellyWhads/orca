@@ -4,6 +4,11 @@ import type { StructuredSessionBackgroundTasksView } from '../../../../../../sha
 import { useStructuredSessionChildRowContext } from './use-structured-session-child-row-context'
 import type { StructuredSessionTaskStop } from './use-structured-session-task-stop'
 import { openNativeChatSubagent } from '../../subagents/native-chat-open-subagent'
+import { useNativeChatCommandOutputScope } from '../../commands/native-chat-command-output-context'
+import {
+  closeNativeChatCommand,
+  useNativeChatOpenCommand
+} from '../../commands/native-chat-open-command'
 
 export function NativeChatStructuredSessionStatus(props: {
   sessionId: string
@@ -22,6 +27,8 @@ export function NativeChatStructuredSessionStatus(props: {
     props.isVisible && props.backgroundTasks.show && Boolean(props.backgroundTasks.children?.length)
   )
   const { backgroundTasks, stop } = props
+  const commandOutput = useNativeChatCommandOutputScope()
+  const openCommand = useNativeChatOpenCommand(props.paneKey)
 
   return (
     <>
@@ -42,8 +49,18 @@ export function NativeChatStructuredSessionStatus(props: {
           expanded={expanded?.sessionId === props.sessionId && expanded.expanded}
           onExpandedChange={(value) => setExpanded({ sessionId: props.sessionId, expanded: value })}
           onStop={stop.onStop}
-          currentAgentId={props.currentAgentId ?? null}
-          onShowAgent={(providerId) => openNativeChatSubagent(props.paneKey, providerId)}
+          currentAgentId={openCommand ? null : (props.currentAgentId ?? null)}
+          onShowAgent={(providerId) => {
+            closeNativeChatCommand(props.paneKey)
+            openNativeChatSubagent(props.paneKey, providerId)
+          }}
+          {...(commandOutput
+            ? {
+                readableCommands: commandOutput.readable,
+                onShowCommand: commandOutput.open,
+                currentCommandId: openCommand?.taskId ?? null
+              }
+            : {})}
         />
       ) : null}
     </>

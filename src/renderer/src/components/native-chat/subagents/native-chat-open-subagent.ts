@@ -72,6 +72,11 @@ export function backFromNativeChatSubagent(paneKey: string): void {
   openNativeChatSubagent(paneKey, openByPane.get(paneKey)?.parentId ?? null)
 }
 
+/** The subagent the pane shows now (null: the main agent), read outside render. */
+export function currentNativeChatSubagent(paneKey: string): string | null {
+  return openByPane.get(paneKey)?.agentId ?? null
+}
+
 export function useNativeChatOpenSubagent(paneKey: string): NativeChatOpenSubagent | null {
   const read = useCallback(() => openByPane.get(paneKey) ?? null, [paneKey])
   return useSyncExternalStore(subscribe, read, read)

@@ -12,6 +12,7 @@ import { NativeChatEmptyState } from './host-access/NativeChatEmptyState'
 import { NativeChatEmptyPane } from './host-access/NativeChatEmptyPane'
 import { NativeChatLoadingCue } from './host-access/NativeChatLoadingCue'
 import { NativeChatSubagentTranscripts } from './subagents/NativeChatSubagentTranscripts'
+import { NativeChatCommandOutputProvider } from './commands/native-chat-command-output-context'
 import { useStructuredNativeChatSubagents } from './subagents/use-structured-native-chat-subagents'
 import { NativeChatContextClearFade } from './conversation/projection/NativeChatContextClearFade'
 import { useStructuredNativeChatSubmitReveal } from './pane/actions/use-structured-native-chat-submit-reveal'
@@ -171,7 +172,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
   const pageBot = useBotForWorkspace(ownerWorktreeId ?? null)
   const botServerDown = pageBot !== null && hostOutage !== null && hostOutage.kind !== 'stopped'
   const subagents = useStructuredNativeChatSubagents({ ...props, paneKey, controller })
-  const subagentOpen = subagents.openId !== null
+  const subagentOpen = subagents.viewOpen
   // A subagent's view takes the composer's place; the main agent's prompts still show.
   const composerShown =
     (prompt === null || promptsUnanswerable) &&
@@ -243,7 +244,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
     hostSendGate,
     hostNotice: botServerDown ? null : hostNotice
   })
-  return (
+  const pane = (
     <NativeChatSlackMirrorContext.Provider value={slackMirror}>
       <NativeChatSurface surface={surface} working={controller.isWorking}>
         {nativeChatPaneHeader(props, ownerWorktreeId, surface.appearance.colorScheme, handOff)}
@@ -388,5 +389,17 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
         {handOff.dialog}
       </NativeChatSurface>
     </NativeChatSlackMirrorContext.Provider>
+  )
+  return (
+    // Rows, the agents strip and the command view read this session's command output through it.
+    <NativeChatCommandOutputProvider
+      target={props.target}
+      sessionId={props.sessionId}
+      paneKey={paneKey}
+      tasks={controller.backgroundTasks.tasks}
+      settledTasks={controller.backgroundTasks.settledTasks}
+    >
+      {pane}
+    </NativeChatCommandOutputProvider>
   )
 }

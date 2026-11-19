@@ -10,6 +10,12 @@ import {
   useNativeChatOpenSubagent
 } from './native-chat-open-subagent'
 import { NativeChatStructuredSubagentStatusBar } from './NativeChatSubagentStatusBar'
+import {
+  closeNativeChatCommand,
+  useNativeChatOpenCommand
+} from '../commands/native-chat-open-command'
+import { closeNativeChatCommandOnEscape } from '../commands/native-chat-command-escape'
+import { NativeChatCommandStatusBar } from '../commands/NativeChatCommandStatusBar'
 
 /** A structured chat's agents strip and open subagent's bar, which share the strip's one Stop. */
 export function useStructuredNativeChatSubagents({
@@ -32,10 +38,25 @@ export function useStructuredNativeChatSubagents({
   const openId = open?.agentId ?? null
   const parentId = open?.parentId ?? null
   const stop = useStructuredSessionTaskStop(sessionId, controller)
+  const command = useNativeChatOpenCommand(paneKey)
+  const { tasks, settledTasks } = controller.backgroundTasks
+  const commandTask = command
+    ? (tasks.find((task) => task.id === command.taskId) ??
+      settledTasks.find((task) => task.id === command.taskId))
+    : undefined
+  const subagentLabel = (agentId: string) =>
+    controller.subagentRoster?.get(agentId)?.entry.label ??
+    t('components.native-chat.subagents.unnamed', 'Subagent')
   return {
     /** The subagent whose view replaces the conversation and the composer; null for none. */
     openId,
-    onKeyDown: (event: React.KeyboardEvent) => closeNativeChatSubagentOnEscape(event, paneKey),
+    /** A subagent's or a command's view replaces the conversation and the composer. */
+    viewOpen: openId !== null || command !== null,
+    onKeyDown: (event: React.KeyboardEvent) => {
+      // A command view sits above any subagent view: Esc leaves it first.
+      closeNativeChatCommandOnEscape(event, paneKey)
+      closeNativeChatSubagentOnEscape(event, paneKey)
+    },
     strip: (
       <NativeChatStructuredSessionStatus
         sessionId={sessionId}
@@ -46,22 +67,25 @@ export function useStructuredNativeChatSubagents({
         currentAgentId={openId}
       />
     ),
-    statusBar:
-      openId === null ? null : (
-        <NativeChatStructuredSubagentStatusBar
-          agentId={openId}
-          entry={controller.subagentRoster?.get(openId)?.entry}
-          paneKey={paneKey}
-          backgroundTasks={controller.backgroundTasks}
-          stop={stop}
-          backTo={
-            parentId === null
-              ? undefined
-              : (controller.subagentRoster?.get(parentId)?.entry.label ??
-                t('components.native-chat.subagents.unnamed', 'Subagent'))
-          }
-          onBack={() => backFromNativeChatSubagent(paneKey)}
-        />
-      )
+    statusBar: command ? (
+      <NativeChatCommandStatusBar
+        task={commandTask}
+        live={tasks.some((task) => task.id === command.taskId)}
+        supportsStop={controller.backgroundTasks.supportsStop}
+        stop={stop}
+        backTo={command.returnTo === null ? undefined : subagentLabel(command.returnTo)}
+        onBack={() => closeNativeChatCommand(paneKey)}
+      />
+    ) : openId === null ? null : (
+      <NativeChatStructuredSubagentStatusBar
+        agentId={openId}
+        entry={controller.subagentRoster?.get(openId)?.entry}
+        paneKey={paneKey}
+        backgroundTasks={controller.backgroundTasks}
+        stop={stop}
+        backTo={parentId === null ? undefined : subagentLabel(parentId)}
+        onBack={() => backFromNativeChatSubagent(paneKey)}
+      />
+    )
   }
 }

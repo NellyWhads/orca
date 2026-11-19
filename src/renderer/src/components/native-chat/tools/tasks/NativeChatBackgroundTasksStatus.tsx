@@ -70,23 +70,46 @@ function kindIconTone(kind: AgentSessionBackgroundTask['kind'], dimmed: boolean)
   return dimmed ? `${tone}/40` : tone
 }
 
-function BackgroundTaskRow(props: {
-  row: AgentChildRowModel
-  now: number
-  supportsTaskStop: boolean
-  stoppingTaskIds: ReadonlySet<string>
-  onStop: (taskId: string) => void
-  onShowAgent?: (providerId: string) => void
-  /** The agent whose view is open, marked current. */
-  currentAgentId?: string | null
-}): React.JSX.Element {
+/** Commands whose output the host streams open their own view, like agents do. */
+type NativeChatStripCommandViews = {
+  readableCommands?: ReadonlyMap<string, unknown>
+  onShowCommand?: (taskId: string, label: string) => void
+  /** The command whose output view is open, marked current. */
+  currentCommandId?: string | null
+}
+
+function BackgroundTaskRow(
+  props: {
+    row: AgentChildRowModel
+    now: number
+    supportsTaskStop: boolean
+    stoppingTaskIds: ReadonlySet<string>
+    onStop: (taskId: string) => void
+    onShowAgent?: (providerId: string) => void
+    /** The agent whose view is open, marked current. */
+    currentAgentId?: string | null
+  } & NativeChatStripCommandViews
+): React.JSX.Element {
   const t = useTranslate()
   const { row, now } = props
   const Icon = KIND_ICONS[row.kind]
   const meta = backgroundTaskRowMeta(row, now)
   const stopId = backgroundTaskRowStopId(row, props.supportsTaskStop)
-  // Only an agent's activity streams into the conversation, filed under the provider's id.
-  const shownId = row.kind === 'agent' && props.onShowAgent ? row.providerId : undefined
+  // An agent's activity streams into the conversation, filed under the provider's id; a command opens
+  // only when its host can stream its output, so a plain row never opens an empty view.
+  const shownId =
+    row.kind === 'agent' && props.onShowAgent
+      ? row.providerId
+      : row.kind === 'command' &&
+          props.onShowCommand &&
+          row.providerId !== undefined &&
+          props.readableCommands?.has(row.providerId)
+        ? row.providerId
+        : undefined
+  const showsCommand = row.kind === 'command'
+  const current = showsCommand
+    ? props.currentCommandId === shownId
+    : props.currentAgentId === shownId
   const content = (
     <>
       <Icon aria-hidden="true" className={`size-3.5 shrink-0 ${kindIconTone(row.kind, false)}`} />
@@ -113,15 +136,29 @@ function BackgroundTaskRow(props: {
           <button
             type="button"
             data-native-chat-agent-row={shownId}
-            aria-current={props.currentAgentId === shownId ? 'true' : undefined}
+            aria-current={current ? 'true' : undefined}
             className={cn(
               '-mx-1 flex h-6 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-1 text-left outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring',
-              props.currentAgentId === shownId && 'bg-accent'
+              current && 'bg-accent'
             )}
-            aria-label={t('components.native-chat.backgroundTasks.openAgent', 'Open {{value0}}', {
-              value0: agentChildRowName(row)
-            })}
-            onClick={() => props.onShowAgent?.(shownId)}
+            aria-label={
+              showsCommand
+                ? t(
+                    'components.native-chat.backgroundTasks.openCommandOutput',
+                    'Show output of {{value0}}',
+                    {
+                      value0: agentChildRowName(row)
+                    }
+                  )
+                : t('components.native-chat.backgroundTasks.openAgent', 'Open {{value0}}', {
+                    value0: agentChildRowName(row)
+                  })
+            }
+            onClick={() =>
+              showsCommand
+                ? props.onShowCommand?.(shownId, agentChildRowName(row))
+                : props.onShowAgent?.(shownId)
+            }
           >
             {content}
           </button>
@@ -155,6 +192,9 @@ function BackgroundTaskRow(props: {
                 onStop={props.onStop}
                 onShowAgent={props.onShowAgent}
                 currentAgentId={props.currentAgentId}
+                readableCommands={props.readableCommands}
+                onShowCommand={props.onShowCommand}
+                currentCommandId={props.currentCommandId}
               />
             ))}
           </ul>
@@ -164,32 +204,34 @@ function BackgroundTaskRow(props: {
   )
 }
 
-export function NativeChatBackgroundTasksStatus(props: {
-  tasks: readonly AgentSessionBackgroundTask[]
-  settledTasks: readonly AgentSessionBackgroundTask[]
-  /** The host's child views, when it publishes them; rows then read these instead of the tasks. */
-  childViews?: readonly AgentChildWorkView[]
-  /** Use the sidebar’s parent context to qualify child state; without it, trust reported live claims. */
-  childRowContext?: AgentChildRowContext
-  supportsTaskStop: boolean
-  /** Offer untargeted Stop only when the provider can perform it. */
-  offersStopAll: boolean
-  /** Some running work is not listed, so the rows are not the whole roster. */
-  incomplete?: boolean
-  stoppingTaskIds: ReadonlySet<string>
-  stoppingAll: boolean
-  /** Let monitoring speak only when idle; a running turn owns the indicator. */
-  indicatorActive: boolean
-  isVisible: boolean
-  /** Parent-owned expansion survives temporary empty rosters, which unmount this strip and flush settled rows. */
-  expanded: boolean
-  onExpandedChange: (expanded: boolean) => void
-  onStop: (taskId?: string) => void
-  /** Open a listed agent's own view. */
-  onShowAgent?: (providerId: string) => void
-  /** The agent whose view the pane shows. */
-  currentAgentId?: string | null
-}): React.JSX.Element {
+export function NativeChatBackgroundTasksStatus(
+  props: {
+    tasks: readonly AgentSessionBackgroundTask[]
+    settledTasks: readonly AgentSessionBackgroundTask[]
+    /** The host's child views, when it publishes them; rows then read these instead of the tasks. */
+    childViews?: readonly AgentChildWorkView[]
+    /** Use the sidebar’s parent context to qualify child state; without it, trust reported live claims. */
+    childRowContext?: AgentChildRowContext
+    supportsTaskStop: boolean
+    /** Offer untargeted Stop only when the provider can perform it. */
+    offersStopAll: boolean
+    /** Some running work is not listed, so the rows are not the whole roster. */
+    incomplete?: boolean
+    stoppingTaskIds: ReadonlySet<string>
+    stoppingAll: boolean
+    /** Let monitoring speak only when idle; a running turn owns the indicator. */
+    indicatorActive: boolean
+    isVisible: boolean
+    /** Parent-owned expansion survives temporary empty rosters, which unmount this strip and flush settled rows. */
+    expanded: boolean
+    onExpandedChange: (expanded: boolean) => void
+    onStop: (taskId?: string) => void
+    /** Open a listed agent's own view. */
+    onShowAgent?: (providerId: string) => void
+    /** The agent whose view the pane shows. */
+    currentAgentId?: string | null
+  } & NativeChatStripCommandViews
+): React.JSX.Element {
   const expanded = props.expanded
   const taskListId = useId()
   const stripRef = useRef<HTMLDivElement>(null)
@@ -299,6 +341,9 @@ export function NativeChatBackgroundTasksStatus(props: {
                           onStop={props.onStop}
                           onShowAgent={props.onShowAgent}
                           currentAgentId={props.currentAgentId}
+                          readableCommands={props.readableCommands}
+                          onShowCommand={props.onShowCommand}
+                          currentCommandId={props.currentCommandId}
                         />
                       ))}
                     </ul>
