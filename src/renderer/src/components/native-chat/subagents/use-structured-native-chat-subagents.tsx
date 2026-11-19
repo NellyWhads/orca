@@ -16,6 +16,8 @@ import {
 } from '../commands/native-chat-open-command'
 import { closeNativeChatCommandOnEscape } from '../commands/native-chat-command-escape'
 import { NativeChatCommandStatusBar } from '../commands/NativeChatCommandStatusBar'
+import { journaledCommandTask } from '../commands/native-chat-command-journal-task'
+import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 
 /** A structured chat's agents strip and open subagent's bar, which share the strip's one Stop. */
 export function useStructuredNativeChatSubagents({
@@ -31,6 +33,7 @@ export function useStructuredNativeChatSubagents({
     subagentRoster?: StructuredAgentSubagentRoster
     backgroundTasks: StructuredSessionBackgroundTasksView
     stopBackgroundTask: (taskId?: string) => Promise<AgentSessionCancelResult | null>
+    journalItems?: readonly AgentJournalRenderItem[]
   }
 }) {
   const t = useTranslate()
@@ -46,7 +49,9 @@ export function useStructuredNativeChatSubagents({
     commandTaskId === null
       ? undefined
       : (tasks.find((task) => task.id === commandTaskId) ??
-        settledTasks.find((task) => task.id === commandTaskId))
+        settledTasks.find((task) => task.id === commandTaskId) ??
+        // The roster drops a finished task; its transcript row still says how it ended.
+        journaledCommandTask(controller.journalItems, commandTaskId))
   const subagentLabel = (agentId: string) =>
     controller.subagentRoster?.get(agentId)?.entry.label ??
     t('components.native-chat.subagents.unnamed', 'Subagent')

@@ -11,11 +11,13 @@ import {
   type NativeChatSubagentView
 } from './native-chat-open-subagent'
 import {
+  closeNativeChatCommand,
   nativeChatCommandSubjectKey,
   useNativeChatOpenCommand
 } from '../commands/native-chat-open-command'
 import { useNativeChatCommandOutputScope } from '../commands/native-chat-command-output-context'
 import { NativeChatCommandView } from '../commands/NativeChatCommandView'
+import { closeOpenNativeChatCommandOnEscape } from '../commands/native-chat-command-escape'
 import { NativeChatLiveTailVisibleContext } from '../commands/native-chat-live-tail-visibility'
 
 /** What took the reader into a subagent, to hand focus back to: its roster entry, its strip row, else the composer. */
@@ -69,6 +71,18 @@ export function NativeChatSubagentTranscripts({
   const commandLabel = commandTask?.description ?? commandTask?.name ?? command?.label ?? ''
   const mainRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<HTMLDivElement>(null)
+  const commandViewRef = useRef<HTMLDivElement>(null)
+  const commandKey = command ? nativeChatCommandSubjectKey(command.subject) : null
+  useEffect(() => {
+    // The control that opened the view may sit in a layer it hid; take focus it dropped, so Esc works.
+    const active = document.activeElement
+    if (
+      commandKey !== null &&
+      (active === null || active === document.body || active.closest('[inert]') !== null)
+    ) {
+      commandViewRef.current?.focus({ preventScroll: true })
+    }
+  }, [commandKey])
   const shownId = shown?.agentId ?? null
   const previousIdRef = useRef<string | null>(null)
   useEffect(() => {
@@ -143,7 +157,13 @@ export function NativeChatSubagentTranscripts({
         ) : null}
         {commandShown ? (
           // Above a subagent's view too: Back returns to whichever view opened the command.
-          <div className="absolute inset-0 flex flex-col">
+          <div
+            ref={commandViewRef}
+            tabIndex={-1}
+            className="absolute inset-0 flex flex-col focus:outline-none"
+            // The view owns its Esc: the pane's handler sits behind the chat root's input routing.
+            onKeyDown={(event) => closeOpenNativeChatCommandOnEscape(event, paneKey)}
+          >
             <NativeChatCommandView
               key={nativeChatCommandSubjectKey(command.subject)}
               target={commandOutput.target}
@@ -151,6 +171,7 @@ export function NativeChatSubagentTranscripts({
               subject={command.subject}
               label={commandLabel}
               isVisible={isVisible}
+              onEscape={() => closeNativeChatCommand(paneKey)}
             />
           </div>
         ) : null}

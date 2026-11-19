@@ -44,6 +44,8 @@ export function useNativeChatCommandTerminal(
     scrollback: number
     /** Tool output in the transcript uses the chat's code type (native-chat.md), not the terminal font. */
     codeFont?: boolean
+    /** Called for a plain Esc inside the terminal, before xterm swallows it. */
+    onEscape?: () => void
   }
 ): NativeChatCommandOutputSink | null {
   const settings = useAppStore((state) => state.settings)
@@ -60,6 +62,10 @@ export function useNativeChatCommandTerminal(
     container: HTMLDivElement
   } | null>(null)
   const { scrollback, codeFont = false } = options
+  const onEscapeRef = useRef(options.onEscape)
+  useLayoutEffect(() => {
+    onEscapeRef.current = options.onEscape
+  })
 
   useEffect(() => {
     const container = containerRef.current
@@ -112,6 +118,23 @@ export function useNativeChatCommandTerminal(
     resize()
     const observer = new ResizeObserver(resize)
     observer.observe(container)
+    // Capture runs before xterm's own handler on its textarea, which cancels the key.
+    const onKeyDown = (event: KeyboardEvent) => {
+      const onEscape = onEscapeRef.current
+      if (
+        onEscape &&
+        event.key === 'Escape' &&
+        !event.altKey &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.shiftKey
+      ) {
+        event.preventDefault()
+        event.stopPropagation()
+        onEscape()
+      }
+    }
+    container.addEventListener('keydown', onKeyDown, true)
     standalone.write(HIDE_CURSOR, { live: true })
     setSink({
       write: (text) => standalone.write(text, { live: true }),
@@ -121,6 +144,7 @@ export function useNativeChatCommandTerminal(
       }
     })
     return () => {
+      container.removeEventListener('keydown', onKeyDown, true)
       observer.disconnect()
       terminalRef.current = null
       setSink(null)

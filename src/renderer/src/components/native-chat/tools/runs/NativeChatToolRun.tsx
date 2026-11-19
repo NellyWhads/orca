@@ -1,4 +1,9 @@
 import { useMemo } from 'react'
+import { NativeChatLiveCommandTail } from '../../commands/NativeChatLiveCommandTail'
+import {
+  nativeChatShellCommandLabel,
+  runningShellCalls
+} from '../../commands/native-chat-running-shell-calls'
 import { useTranslation } from 'react-i18next'
 import { NativeChatExpandable } from '../../messages/disclosure/NativeChatExpandable'
 import { useNativeChatDisclosure } from '../../messages/disclosure/native-chat-disclosure-store'
@@ -230,6 +235,17 @@ export function NativeChatToolRun({
         runtimeContext={runtimeContext}
         className="mb-0 mt-1"
       />
+      {/* A collapsed run still shows what its running commands print; open, each row shows its own. */}
+      {!open && live
+        ? runningShellCalls(blocks).map((call) => (
+            <NativeChatLiveCommandTail
+              key={call.callId}
+              toolUseId={call.callId}
+              label={nativeChatShellCommandLabel(call)}
+              captioned
+            />
+          ))
+        : null}
       <NativeChatExpandable open={open && showsHeader}>
         <NativeChatToolRunMemberList
           blocks={blocks}

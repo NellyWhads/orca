@@ -18,22 +18,29 @@ const TAIL_FRAME_CLASS =
 /** A running foreground command's output under its call row, until its result replaces it. */
 export function NativeChatLiveCommandTail({
   toolUseId,
-  label
+  label,
+  captioned = false
 }: {
   toolUseId: string
   label: string
+  /** Under a collapsed run no row names the command, so the tail does. */
+  captioned?: boolean
 }): React.JSX.Element | null {
   const scope = useNativeChatCommandOutputScope()
-  return scope ? <LiveTail toolUseId={toolUseId} label={label} scope={scope} /> : null
+  return scope ? (
+    <LiveTail toolUseId={toolUseId} label={label} captioned={captioned} scope={scope} />
+  ) : null
 }
 
 function LiveTail({
   toolUseId,
   label,
+  captioned,
   scope
 }: {
   toolUseId: string
   label: string
+  captioned: boolean
   scope: NonNullable<ReturnType<typeof useNativeChatCommandOutputScope>>
 }): React.JSX.Element {
   const t = useTranslate()
@@ -58,6 +65,14 @@ function LiveTail({
     <div ref={anchorRef} className="ml-6">
       {shown ? (
         <div className="py-1">
+          {captioned ? (
+            <p
+              className="truncate pb-0.5 font-mono text-xs text-chat-foreground-faint"
+              title={label}
+            >
+              {label}
+            </p>
+          ) : null}
           {hasSlot ? (
             <TailTerminal attach={attach} label={label} />
           ) : (

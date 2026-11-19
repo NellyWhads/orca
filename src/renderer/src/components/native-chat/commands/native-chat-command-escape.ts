@@ -19,3 +19,26 @@ export function closeNativeChatCommandOnEscape(event: React.KeyboardEvent, paneK
   event.preventDefault()
   closeNativeChatCommand(paneKey)
 }
+
+/** The open view's own Esc, which still closes it after a root handler claimed the key for itself. */
+export function closeOpenNativeChatCommandOnEscape(
+  event: React.KeyboardEvent,
+  paneKey: string
+): void {
+  const target = event.target
+  if (
+    event.key !== 'Escape' ||
+    event.altKey ||
+    event.ctrlKey ||
+    event.metaKey ||
+    event.shiftKey ||
+    !(target instanceof Element) ||
+    isEditableTarget(target) ||
+    target.closest('[role="menu"], [role="dialog"], [role="listbox"]') !== null
+  ) {
+    return
+  }
+  event.preventDefault()
+  event.stopPropagation()
+  closeNativeChatCommand(paneKey)
+}

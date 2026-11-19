@@ -29,6 +29,7 @@ import { NativeChatExpandable } from '../../messages/disclosure/NativeChatExpand
 import { useNativeChatDisclosure } from '../../messages/disclosure/native-chat-disclosure-store'
 import { NativeChatToolOutput } from './NativeChatToolOutput'
 import { NativeChatLiveCommandTail } from '../../commands/NativeChatLiveCommandTail'
+import { isRunningShellCall } from '../../commands/native-chat-running-shell-calls'
 
 const TARGET_CLASS =
   'min-w-0 truncate text-chat-foreground transition-colors group-hover/tool-line:text-chat-foreground-strong'
@@ -111,15 +112,7 @@ export function NativeChatToolLine({
   const fullCommand = label?.commandDetail ?? null
   const commandAlone = label?.command === true && label.verb !== null && label.target.length > 0
   // A shell command still running streams its output here until its result arrives and takes over.
-  const liveCallId =
-    isCall &&
-    block.name === 'Bash' &&
-    block.callId !== undefined &&
-    result === undefined &&
-    // A restored call with no lifecycle and no result was abandoned, not running.
-    block.state === 'running'
-      ? block.callId
-      : null
+  const liveCallId = isRunningShellCall(block, result !== undefined) ? block.callId : null
 
   return (
     <div>

@@ -47,7 +47,8 @@ export function NativeChatCommandView({
   sessionId,
   subject,
   label,
-  isVisible
+  isVisible,
+  onEscape
 }: {
   target: RuntimeClientTarget
   sessionId: string
@@ -55,11 +56,16 @@ export function NativeChatCommandView({
   subject: NativeChatCommandOutputSubject
   label: string
   isVisible: boolean
+  /** Leaves the view; xterm cancels the Esc it sees, so the pane's own handler never would. */
+  onEscape?: () => void
 }): React.JSX.Element {
   const frameRef = useRef<HTMLDivElement>(null)
   const terminalRef = useRef<HTMLDivElement>(null)
   const onScreen = useNativeChatOnScreen(frameRef)
-  const sink = useNativeChatCommandTerminal(terminalRef, { scrollback: VIEW_SCROLLBACK_ROWS })
+  const sink = useNativeChatCommandTerminal(terminalRef, {
+    scrollback: VIEW_SCROLLBACK_ROWS,
+    ...(onEscape ? { onEscape } : {})
+  })
   const { status, skippedBytes, hasOutput } = useNativeChatCommandOutputStream({
     target,
     sessionId,
@@ -115,7 +121,7 @@ export function NativeChatCommandOutputFrame({
           >
             {label}
           </h2>
-          <span className="ml-auto shrink-0 rounded-full border border-border px-1.5 text-3xs text-chat-foreground-faint">
+          <span className="shrink-0 rounded-full border border-border px-1.5 text-3xs text-chat-foreground-faint">
             {t('components.native-chat.commandOutput.readOnly', 'Read-only')}
           </span>
         </div>

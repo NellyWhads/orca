@@ -38,7 +38,8 @@ export async function readNativeChatCommandOutputChunk(
       target,
       'agentSession.readCommandOutput',
       { sessionId, ...subject, offset },
-      { timeoutMs: READ_TIMEOUT_MS, suppressFeatureInteraction: true }
+      // No suppressFeatureInteraction: it adds a params key, and this strict schema rejects unknown keys.
+      { timeoutMs: READ_TIMEOUT_MS }
     )
   } catch {
     return null
