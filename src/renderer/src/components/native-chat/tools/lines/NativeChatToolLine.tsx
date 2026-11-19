@@ -28,6 +28,7 @@ import {
 import { NativeChatExpandable } from '../../messages/disclosure/NativeChatExpandable'
 import { useNativeChatDisclosure } from '../../messages/disclosure/native-chat-disclosure-store'
 import { NativeChatToolOutput } from './NativeChatToolOutput'
+import { NativeChatLiveCommandTail } from '../../commands/NativeChatLiveCommandTail'
 
 const TARGET_CLASS =
   'min-w-0 truncate text-chat-foreground transition-colors group-hover/tool-line:text-chat-foreground-strong'
@@ -109,6 +110,15 @@ export function NativeChatToolLine({
   // A call opens to its output; its arguments are the row's own words, bar a shortened command.
   const fullCommand = label?.commandDetail ?? null
   const commandAlone = label?.command === true && label.verb !== null && label.target.length > 0
+  // A shell command still running streams its output here until its result arrives and takes over.
+  const liveCallId =
+    isCall &&
+    block.name === 'Bash' &&
+    block.callId !== undefined &&
+    result === undefined &&
+    (block.state === undefined || block.state === 'running')
+      ? block.callId
+      : null
 
   return (
     <div>
@@ -170,6 +180,12 @@ export function NativeChatToolLine({
           ) : null}
         </span>
       </button>
+      {liveCallId !== null ? (
+        <NativeChatLiveCommandTail
+          toolUseId={liveCallId}
+          label={fullCommand ?? label?.target ?? name}
+        />
+      ) : null}
       {hasDetail ? (
         <NativeChatExpandable open={expanded}>
           <ToolLineDetail

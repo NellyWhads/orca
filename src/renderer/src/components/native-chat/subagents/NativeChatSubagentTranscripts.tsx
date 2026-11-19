@@ -10,9 +10,13 @@ import {
   useNativeChatOpenSubagent,
   type NativeChatSubagentView
 } from './native-chat-open-subagent'
-import { useNativeChatOpenCommand } from '../commands/native-chat-open-command'
+import {
+  nativeChatCommandSubjectKey,
+  useNativeChatOpenCommand
+} from '../commands/native-chat-open-command'
 import { useNativeChatCommandOutputScope } from '../commands/native-chat-command-output-context'
 import { NativeChatCommandView } from '../commands/NativeChatCommandView'
+import { NativeChatLiveTailVisibleContext } from '../commands/native-chat-live-tail-visibility'
 
 /** What took the reader into a subagent, to hand focus back to: its roster entry, its strip row, else the composer. */
 function returnFocusTarget(main: HTMLElement, agentId: string): HTMLElement | null {
@@ -56,7 +60,10 @@ export function NativeChatSubagentTranscripts({
   const isVisible = props.isVisible ?? true
   const command = useNativeChatOpenCommand(paneKey)
   const commandOutput = useNativeChatCommandOutputScope()
-  const commandTask = command ? commandOutput?.readable.get(command.taskId) : undefined
+  const commandTask =
+    command && 'taskId' in command.subject
+      ? commandOutput?.readable.get(command.subject.taskId)
+      : undefined
   const commandShown = command !== null && commandOutput !== null
   // The roster may drop a finished command while its view is open; the row's words stay its title.
   const commandLabel = commandTask?.description ?? commandTask?.name ?? command?.label ?? ''
@@ -95,11 +102,13 @@ export function NativeChatSubagentTranscripts({
           className={cn('flex min-h-0 flex-1 flex-col', (shown || commandShown) && 'invisible')}
           inert={shown !== null || commandShown}
         >
-          <NativeChatMessageList
-            {...props}
-            isVisible={isVisible && shown === null && !commandShown}
-            subagentView={main}
-          />
+          <NativeChatLiveTailVisibleContext value={isVisible && shown === null && !commandShown}>
+            <NativeChatMessageList
+              {...props}
+              isVisible={isVisible && shown === null && !commandShown}
+              subagentView={main}
+            />
+          </NativeChatLiveTailVisibleContext>
         </div>
         {shown ? (
           <div
@@ -112,32 +121,34 @@ export function NativeChatSubagentTranscripts({
             inert={commandShown}
           >
             {/* `/btw` forks from the conversation, never from a subagent's rows. */}
-            <NativeChatSideChatForkPointContext value={undefined}>
-              <NativeChatMessageList
-                key={shown.agentId}
-                session={props.session}
-                journalItems={props.journalItems}
-                journalSubmissions={props.journalSubmissions}
-                journalLatestTurn={props.journalLatestTurn}
-                subagentRoster={props.subagentRoster}
-                subagentView={shown}
-                isVisible={isVisible && !commandShown}
-                isWorking={false}
-                expandSignal={props.expandSignal}
-                structuredAttachments={props.structuredAttachments}
-                runtimeContext={props.runtimeContext}
-              />
-            </NativeChatSideChatForkPointContext>
+            <NativeChatLiveTailVisibleContext value={isVisible && !commandShown}>
+              <NativeChatSideChatForkPointContext value={undefined}>
+                <NativeChatMessageList
+                  key={shown.agentId}
+                  session={props.session}
+                  journalItems={props.journalItems}
+                  journalSubmissions={props.journalSubmissions}
+                  journalLatestTurn={props.journalLatestTurn}
+                  subagentRoster={props.subagentRoster}
+                  subagentView={shown}
+                  isVisible={isVisible && !commandShown}
+                  isWorking={false}
+                  expandSignal={props.expandSignal}
+                  structuredAttachments={props.structuredAttachments}
+                  runtimeContext={props.runtimeContext}
+                />
+              </NativeChatSideChatForkPointContext>
+            </NativeChatLiveTailVisibleContext>
           </div>
         ) : null}
         {commandShown ? (
           // Above a subagent's view too: Back returns to whichever view opened the command.
           <div className="absolute inset-0 flex flex-col">
             <NativeChatCommandView
-              key={command.taskId}
+              key={nativeChatCommandSubjectKey(command.subject)}
               target={commandOutput.target}
               sessionId={commandOutput.sessionId}
-              taskId={command.taskId}
+              subject={command.subject}
               label={commandLabel}
               isVisible={isVisible}
             />

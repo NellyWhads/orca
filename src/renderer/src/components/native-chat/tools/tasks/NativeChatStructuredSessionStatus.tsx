@@ -58,7 +58,8 @@ export function NativeChatStructuredSessionStatus(props: {
             ? {
                 readableCommands: commandOutput.readable,
                 onShowCommand: commandOutput.open,
-                currentCommandId: openCommand?.taskId ?? null
+                currentCommandId:
+                  openCommand && 'taskId' in openCommand.subject ? openCommand.subject.taskId : null
               }
             : {})}
         />

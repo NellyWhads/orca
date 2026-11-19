@@ -14,6 +14,8 @@ export type NativeChatCommandOutputScope = {
   readable: ReadonlyMap<string, AgentSessionBackgroundTask>
   /** Open a readable command's output in place of the conversation, titled with its row's words. */
   open: (taskId: string, label: string) => void
+  /** Open a running foreground command's output by the call that runs it. */
+  openToolCall: (toolUseId: string, label: string) => void
 }
 
 const NativeChatCommandOutputContext = createContext<NativeChatCommandOutputScope | null>(null)
@@ -64,7 +66,13 @@ export function NativeChatCommandOutputProvider({
       readable,
       open: (taskId, label) =>
         openNativeChatCommand(paneKey, {
-          taskId,
+          subject: { taskId },
+          label,
+          returnTo: currentNativeChatSubagent(paneKey)
+        }),
+      openToolCall: (toolUseId, label) =>
+        openNativeChatCommand(paneKey, {
+          subject: { toolUseId },
           label,
           returnTo: currentNativeChatSubagent(paneKey)
         })

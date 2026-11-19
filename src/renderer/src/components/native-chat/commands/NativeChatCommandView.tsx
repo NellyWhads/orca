@@ -5,14 +5,19 @@ import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/h
 import { useNativeChatCommandTerminal } from './use-native-chat-command-terminal'
 import {
   useNativeChatCommandOutputStream,
-  type NativeChatCommandOutputStatus
+  type NativeChatCommandOutputStatus,
+  type NativeChatCommandOutputSubject
 } from './use-native-chat-command-output-stream'
 import { useNativeChatOnScreen } from './use-native-chat-on-screen'
 
 // The view holds a long-running command's recent history; the file on disk keeps all of it.
 const VIEW_SCROLLBACK_ROWS = 5000
 
-function useNotice(status: NativeChatCommandOutputStatus, shownAny: boolean): string | null {
+function useNotice(
+  status: NativeChatCommandOutputStatus,
+  shownAny: boolean,
+  foreground: boolean
+): string | null {
   const t = useTranslate()
   if (status === 'unavailable') {
     return t(
@@ -24,22 +29,29 @@ function useNotice(status: NativeChatCommandOutputStatus, shownAny: boolean): st
     return t('components.native-chat.commandOutput.waiting', 'Waiting for output…')
   }
   if (status === 'ended' && !shownAny) {
-    return t('components.native-chat.commandOutput.empty', 'The command printed nothing.')
+    // A foreground command's file is gone once it ends; what it printed is in its result.
+    return foreground
+      ? t(
+          'components.native-chat.commandOutput.endedForeground',
+          'The command finished; its output is in the conversation.'
+        )
+      : t('components.native-chat.commandOutput.empty', 'The command printed nothing.')
   }
   return null
 }
 
-/** A background command's output, read-only, in place of the conversation. */
+/** A command's output, read-only, in place of the conversation. */
 export function NativeChatCommandView({
   target,
   sessionId,
-  taskId,
+  subject,
   label,
   isVisible
 }: {
   target: RuntimeClientTarget
   sessionId: string
-  taskId: string
+  /** A background task, or the call running a foreground command. */
+  subject: NativeChatCommandOutputSubject
   label: string
   isVisible: boolean
 }): React.JSX.Element {
@@ -50,7 +62,7 @@ export function NativeChatCommandView({
   const { status, skippedBytes, hasOutput } = useNativeChatCommandOutputStream({
     target,
     sessionId,
-    subject: { taskId },
+    subject,
     active: isVisible && onScreen,
     sink
   })
@@ -60,6 +72,7 @@ export function NativeChatCommandView({
       status={status}
       skippedBytes={skippedBytes}
       hasOutput={hasOutput}
+      foreground={'toolUseId' in subject}
       frameRef={frameRef}
       terminalRef={terminalRef}
     />
@@ -72,6 +85,7 @@ export function NativeChatCommandOutputFrame({
   status,
   skippedBytes,
   hasOutput,
+  foreground = false,
   frameRef,
   terminalRef
 }: {
@@ -80,11 +94,13 @@ export function NativeChatCommandOutputFrame({
   skippedBytes: number
   /** Some output reached the terminal, so an ended command does not claim it printed nothing. */
   hasOutput: boolean
+  /** Opened by the call running a foreground command, whose file goes away when it ends. */
+  foreground?: boolean
   frameRef?: React.RefObject<HTMLDivElement | null>
   terminalRef: React.RefObject<HTMLDivElement | null>
 }): React.JSX.Element {
   const t = useTranslate()
-  const notice = useNotice(status, hasOutput || skippedBytes > 0)
+  const notice = useNotice(status, hasOutput || skippedBytes > 0, foreground)
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-chat-pane">
       <div className="shrink-0 border-b border-border/60 px-3 sm:px-4">

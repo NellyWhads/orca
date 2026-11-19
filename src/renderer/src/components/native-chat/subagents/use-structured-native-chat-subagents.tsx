@@ -40,10 +40,13 @@ export function useStructuredNativeChatSubagents({
   const stop = useStructuredSessionTaskStop(sessionId, controller)
   const command = useNativeChatOpenCommand(paneKey)
   const { tasks, settledTasks } = controller.backgroundTasks
-  const commandTask = command
-    ? (tasks.find((task) => task.id === command.taskId) ??
-      settledTasks.find((task) => task.id === command.taskId))
-    : undefined
+  const commandTaskId = command && 'taskId' in command.subject ? command.subject.taskId : null
+  // A foreground command opened by its call has no roster entry; its bar offers only Back.
+  const commandTask =
+    commandTaskId === null
+      ? undefined
+      : (tasks.find((task) => task.id === commandTaskId) ??
+        settledTasks.find((task) => task.id === commandTaskId))
   const subagentLabel = (agentId: string) =>
     controller.subagentRoster?.get(agentId)?.entry.label ??
     t('components.native-chat.subagents.unnamed', 'Subagent')
@@ -70,7 +73,7 @@ export function useStructuredNativeChatSubagents({
     statusBar: command ? (
       <NativeChatCommandStatusBar
         task={commandTask}
-        live={tasks.some((task) => task.id === command.taskId)}
+        live={tasks.some((task) => task.id === commandTaskId)}
         supportsStop={controller.backgroundTasks.supportsStop}
         stop={stop}
         backTo={command.returnTo === null ? undefined : subagentLabel(command.returnTo)}

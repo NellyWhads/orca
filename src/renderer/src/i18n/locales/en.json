@@ -22507,7 +22507,10 @@
         "empty": "The command printed nothing.",
         "readOnly": "Read-only",
         "skipped": "Showing the latest output; earlier lines are not shown.",
-        "label": "Output of {{value0}}"
+        "label": "Output of {{value0}}",
+        "endedForeground": "The command finished; its output is in the conversation.",
+        "liveLabel": "Live output of {{value0}}",
+        "showLive": "Show live output"
       }
     },
     "tab": {
