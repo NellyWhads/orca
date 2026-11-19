@@ -1,6 +1,6 @@
 // A tail's stream outlives its row, so a row the list remounts returns at the same height and content.
 
-import { useEffect, useLayoutEffect, useRef, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useSyncExternalStore } from 'react'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   NATIVE_CHAT_COMMAND_ANNOUNCE_TIMEOUT_MS,
@@ -148,6 +148,30 @@ function stopPolling(entry: TailEntry): void {
   entry.stop = null
 }
 
+function subscribeEntry(entry: TailEntry, listener: () => void): () => void {
+  entry.listeners.add(listener)
+  return () => entry.listeners.delete(listener)
+}
+
+/** Polls while any consumer is active; returns that consumer's release. */
+function activateEntry(entry: TailEntry): () => void {
+  entry.activeConsumers += 1
+  startPolling(entry)
+  return () => {
+    entry.activeConsumers -= 1
+    if (entry.activeConsumers === 0) {
+      stopPolling(entry)
+    }
+  }
+}
+
+/** A terminal mounted later shows what already streamed, then follows along. */
+function attachTerminal(entry: TailEntry, terminal: NativeChatCommandOutputSink): () => void {
+  terminal.write(entry.buffer)
+  entry.terminals.add(terminal)
+  return () => entry.terminals.delete(terminal)
+}
+
 /** A running call's tail state; it polls only while `active` (its layer shown, it on screen, the window visible). */
 export function useNativeChatCommandTail(input: {
   target: RuntimeClientTarget
@@ -160,39 +184,13 @@ export function useNativeChatCommandTail(input: {
 } {
   const { target, sessionId, toolUseId, active } = input
   const entry = tailEntry(target, sessionId, toolUseId)
-  const entryRef = useRef(entry)
-  useLayoutEffect(() => {
-    entryRef.current = entry
-  })
-  const snapshot = useSyncExternalStore(
-    (listener) => {
-      entry.listeners.add(listener)
-      return () => entry.listeners.delete(listener)
-    },
-    () => entry.snapshot,
-    () => entry.snapshot
+  const subscribe = useCallback((listener: () => void) => subscribeEntry(entry, listener), [entry])
+  const read = useCallback(() => entry.snapshot, [entry])
+  const snapshot = useSyncExternalStore(subscribe, read, read)
+  useEffect(() => (active ? activateEntry(entry) : undefined), [active, entry])
+  const attach = useCallback(
+    (terminal: NativeChatCommandOutputSink) => attachTerminal(entry, terminal),
+    [entry]
   )
-  useEffect(() => {
-    if (!active) {
-      return
-    }
-    entry.activeConsumers += 1
-    startPolling(entry)
-    return () => {
-      entry.activeConsumers -= 1
-      if (entry.activeConsumers === 0) {
-        stopPolling(entry)
-      }
-    }
-  }, [active, entry])
-  return {
-    snapshot,
-    attach: (terminal) => {
-      const current = entryRef.current
-      // A terminal mounted later shows what already streamed, then follows along.
-      terminal.write(current.buffer)
-      current.terminals.add(terminal)
-      return () => current.terminals.delete(terminal)
-    }
-  }
+  return { snapshot, attach }
 }
