@@ -22510,7 +22510,8 @@
         "label": "Output of {{value0}}",
         "endedForeground": "The command finished; its output is in the conversation.",
         "liveLabel": "Live output of {{value0}}",
-        "showLive": "Show live output"
+        "showLive": "Show live output",
+        "tailStopped": "Live output is no longer available."
       }
     },
     "tab": {

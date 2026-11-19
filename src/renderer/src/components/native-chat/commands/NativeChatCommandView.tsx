@@ -9,6 +9,7 @@ import {
   type NativeChatCommandOutputSubject
 } from './use-native-chat-command-output-stream'
 import { useNativeChatOnScreen } from './use-native-chat-on-screen'
+import { NATIVE_CHAT_COMMAND_ANNOUNCE_TIMEOUT_MS } from './native-chat-command-output-poll'
 
 // The view holds a long-running command's recent history; the file on disk keeps all of it.
 const VIEW_SCROLLBACK_ROWS = 5000
@@ -64,7 +65,9 @@ export function NativeChatCommandView({
     sessionId,
     subject,
     active: isVisible && onScreen,
-    sink
+    sink,
+    // Opened by a call that may never run a task: give up as the inline tail does.
+    ...('toolUseId' in subject ? { pendingTimeoutMs: NATIVE_CHAT_COMMAND_ANNOUNCE_TIMEOUT_MS } : {})
   })
   return (
     <NativeChatCommandOutputFrame

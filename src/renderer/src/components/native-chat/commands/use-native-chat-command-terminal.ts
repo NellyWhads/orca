@@ -16,6 +16,16 @@ import type { NativeChatCommandOutputSink } from './use-native-chat-command-outp
 // A command's own cursor means nothing in a read-only copy of its output.
 const HIDE_CURSOR = '\x1b[?25l'
 
+/** The size and face `text-chat-code font-mono` resolves to on the container, which follows Code text size. */
+function chatCodeFont(container: HTMLElement): { fontSize?: number; fontFamily?: string } {
+  const style = getComputedStyle(container)
+  const fontSize = Number.parseFloat(style.fontSize)
+  return {
+    ...(Number.isFinite(fontSize) && fontSize > 0 ? { fontSize } : {}),
+    ...(style.fontFamily ? { fontFamily: style.fontFamily } : {})
+  }
+}
+
 function terminalColors(
   settings: GlobalSettings | null,
   systemPrefersDark: boolean
@@ -27,13 +37,14 @@ function terminalColors(
   return { theme: composeActiveTerminalTheme(appearance.theme, settings), mode: appearance.mode }
 }
 
-/**
- * Opens xterm in the container and returns a sink that writes into it, or null until it opens (or when it can't).
- * `rows` fixes the height (the inline tail); without it the terminal fills its container.
- */
+/** Opens xterm filling the container and returns a sink into it; null until it opens, or when it can't. */
 export function useNativeChatCommandTerminal(
   containerRef: React.RefObject<HTMLDivElement | null>,
-  options: { rows?: number; scrollback: number }
+  options: {
+    scrollback: number
+    /** Tool output in the transcript uses the chat's code type (native-chat.md), not the terminal font. */
+    codeFont?: boolean
+  }
 ): NativeChatCommandOutputSink | null {
   const settings = useAppStore((state) => state.settings)
   const systemPrefersDark = useSystemPrefersDark()
@@ -48,7 +59,7 @@ export function useNativeChatCommandTerminal(
     standalone: NonNullable<ReturnType<typeof openStandaloneTerminal>>
     container: HTMLDivElement
   } | null>(null)
-  const { rows, scrollback } = options
+  const { scrollback, codeFont = false } = options
 
   useEffect(() => {
     const container = containerRef.current
@@ -66,9 +77,10 @@ export function useNativeChatCommandTerminal(
           theme,
           themeMode: mode,
           cols: 80,
-          rows: rows ?? 24,
+          rows: 24,
           scrollback
         }),
+        ...(codeFont ? chatCodeFont(container) : {}),
         // The output files hold bare LF line ends; nobody types into this terminal.
         convertEol: true,
         disableStdin: true,
@@ -94,7 +106,7 @@ export function useNativeChatCommandTerminal(
     const resize = () => {
       const proposed = fit.proposeDimensions()
       if (proposed && proposed.cols > 1) {
-        terminal.resize(proposed.cols, rows ?? Math.max(2, proposed.rows))
+        terminal.resize(proposed.cols, Math.max(2, proposed.rows))
       }
     }
     resize()
@@ -114,7 +126,7 @@ export function useNativeChatCommandTerminal(
       setSink(null)
       standalone.dispose()
     }
-  }, [containerRef, rows, scrollback])
+  }, [codeFont, containerRef, scrollback])
 
   // Follow theme changes without reopening the terminal or losing what it shows.
   useEffect(() => {

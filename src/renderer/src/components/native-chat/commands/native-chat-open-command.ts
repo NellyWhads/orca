@@ -1,19 +1,19 @@
 // Which command's output each chat pane shows in place of its conversation; session-only, never persisted.
 
 import { useCallback, useSyncExternalStore } from 'react'
-import type { NativeChatCommandOutputSubject } from './use-native-chat-command-output-stream'
+import {
+  nativeChatCommandSubjectKey,
+  type NativeChatCommandOutputSubject
+} from './native-chat-command-output-poll'
 
-/** The open command (a background task, or the call running a foreground one), its row's words, and the
- *  subagent whose view opened it (null: the main conversation), which Back returns to. */
+/** The open command, its row's words, and the subagent view it was opened from, which Back returns to. */
 export type NativeChatOpenCommand = {
   subject: NativeChatCommandOutputSubject
   label: string
   returnTo: string | null
 }
 
-export function nativeChatCommandSubjectKey(subject: NativeChatCommandOutputSubject): string {
-  return 'taskId' in subject ? `t:${subject.taskId}` : `u:${subject.toolUseId}`
-}
+export { nativeChatCommandSubjectKey }
 
 const openByPane = new Map<string, NativeChatOpenCommand>()
 const listeners = new Set<() => void>()

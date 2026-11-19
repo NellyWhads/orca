@@ -86,10 +86,11 @@ export const runningWithLiveTail = defineFixture({
       <NativeChatToolLine block={call('toolu_live1', 'pnpm test --maxWorkers=2')} />
     </Pane>
   ),
-  interact: () => wait(800)
+  // The first read waits 2 s: a quick command finishes before it costs one.
+  interact: () => wait(2800)
 })
 
-/** Four commands run at once: three stream, the fourth offers to open its output instead. */
+/** Four commands stream at once: three get terminals, the fourth keeps the same height and offers to open. */
 export const overCapOffersOpen = defineFixture({
   width: 640,
   setup: stubCommandOutput,
@@ -101,7 +102,7 @@ export const overCapOffersOpen = defineFixture({
       <NativeChatToolLine block={call('toolu_cap4', 'pnpm tc')} />
     </Pane>
   ),
-  interact: () => wait(5600)
+  interact: () => wait(2800)
 })
 
 const finished: NativeChatToolResultBlock = {
@@ -126,4 +127,18 @@ export const handedOverToResult = defineFixture({
     frame.querySelector<HTMLButtonElement>('button[aria-expanded]')?.click()
     await wait(400)
   }
+})
+
+/** A restored call with no lifecycle and no result was abandoned: no tail, no read. */
+export const abandonedRestoredCall = defineFixture({
+  width: 640,
+  setup: stubCommandOutput,
+  render: () => (
+    <Pane>
+      <NativeChatToolLine
+        block={{ ...call('toolu_old1', 'pnpm test --maxWorkers=2'), state: undefined }}
+      />
+    </Pane>
+  ),
+  interact: () => wait(2800)
 })

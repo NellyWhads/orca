@@ -1,5 +1,4 @@
-// At most a few inline live terminals at once: several subagents can each run a command, and every tail is an
-// xterm plus a poll. Rows claim in mount order; a row past the cap waits and takes a slot when one frees.
+// At most a few inline terminals at once, held only by tails on screen with output; the rest wait in claim order.
 
 import { useEffect, useSyncExternalStore } from 'react'
 
@@ -19,9 +18,12 @@ function publish(): void {
   }
 }
 
-/** Whether this row holds one of the live-tail slots; `claimKey` must be unique to the mounted row. */
-export function useNativeChatLiveTailSlot(claimKey: string): boolean {
+/** Whether this row holds a slot; it claims one only while `wants` (a visible tail with output to show). */
+export function useNativeChatLiveTailSlot(claimKey: string, wants: boolean): boolean {
   useEffect(() => {
+    if (!wants) {
+      return
+    }
     claims.push(claimKey)
     publish()
     return () => {
@@ -31,7 +33,7 @@ export function useNativeChatLiveTailSlot(claimKey: string): boolean {
         publish()
       }
     }
-  }, [claimKey])
+  }, [claimKey, wants])
   const read = () => {
     const index = claims.indexOf(claimKey)
     return index !== -1 && index < NATIVE_CHAT_LIVE_TAIL_SLOTS

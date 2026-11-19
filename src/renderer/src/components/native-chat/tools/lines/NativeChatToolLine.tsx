@@ -116,7 +116,8 @@ export function NativeChatToolLine({
     block.name === 'Bash' &&
     block.callId !== undefined &&
     result === undefined &&
-    (block.state === undefined || block.state === 'running')
+    // A restored call with no lifecycle and no result was abandoned, not running.
+    block.state === 'running'
       ? block.callId
       : null
 
