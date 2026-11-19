@@ -19,6 +19,7 @@ import type {
 } from '../claude-structured-session-state'
 import type { ClaudeStructuredSessionEvent } from '../lifecycle/claude-structured-session-event'
 import { ClaudeBackgroundTaskTracker } from '../../background-tasks/claude-background-task-tracker'
+import { ClaudeCommandOutputLocator } from '../../background-tasks/command-output/claude-command-output-locator'
 import { ClaudeChildWorkDecoder } from '../../child-work/claude-child-work-decoder'
 import { ClaudeSlashCommandCatalog } from '../../command-catalog/claude-slash-command-catalog'
 import type { ClaudeStructuredLaunch } from '../launch/claude-structured-launch-resolution'
@@ -131,6 +132,15 @@ export function createClaudeSessionPublication(input: {
       retiredDispatchWaiters: [],
       replayContentFallbackBlocked: false,
       backgroundTasks: new ClaudeBackgroundTaskTracker(),
+      commandOutput: new ClaudeCommandOutputLocator({
+        cwd: input.launch.cwd,
+        ...(input.launch.env?.CLAUDE_CODE_TMPDIR
+          ? { tmpDir: input.launch.env.CLAUDE_CODE_TMPDIR }
+          : {}),
+        providerSessionId: () => input.launch.providerSessionId,
+        onReadableChanged: () =>
+          input.deps.onBackgroundTasksChanged?.(input.request.identity.sessionId)
+      }),
       childWork: new ClaudeChildWorkDecoder(input.translator?.taskInvocations),
       // An unread catalog is unavailable, not empty.
       commands: new ClaudeSlashCommandCatalog(),

@@ -52,6 +52,7 @@ import { claudeForkForRewind } from '../transcripts/claude-rewind-fork'
 import { copyClaudeConversation } from '../transcripts/claude-conversation-copy'
 import { ClaudeConversationNaming } from '../conversation-naming/claude-conversation-naming'
 import { syncClaudePromptSuggestionPause } from './claude-prompt-suggestion-pause'
+import { claudeCommandOutputs } from './claude-structured-command-output'
 
 export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAdapter {
   private readonly sessions = new Map<string, ClaudeSession>()
@@ -208,6 +209,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     })
   backgroundTaskStops = (sessionId: string) =>
     this.sessions.has(sessionId) ? { supportsTaskStop: true, supportsStopAll: true } : undefined
+  commandOutputs = claudeCommandOutputs(this.sessions)
   readCommands: NonNullable<StructuredAgentSessionAdapter['readCommands']> = (sessionId) =>
     this.sessions.get(sessionId)?.commands.commands
   manageMcp: NonNullable<StructuredAgentSessionAdapter['manageMcp']> = (record, operation) =>

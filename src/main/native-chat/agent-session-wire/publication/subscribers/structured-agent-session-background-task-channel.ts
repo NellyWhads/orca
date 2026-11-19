@@ -6,7 +6,10 @@ import type {
   AgentSessionHistoryRequest,
   AgentSessionHistoryResult
 } from '../../../../../shared/agent-session/agent-session-wire'
-import type { AgentSessionBackgroundTaskState } from '../../../../../shared/agent-session/background-tasks/agent-session-background-task-wire'
+import type {
+  AgentSessionBackgroundTask,
+  AgentSessionBackgroundTaskState
+} from '../../../../../shared/agent-session/background-tasks/agent-session-background-task-wire'
 import type { AgentChildWorkView } from '../../../../../shared/agent-status/child-work/agent-status-child-work-view'
 import { structuredChildWorkLegacyTasks } from '../../../../../shared/agent-session/background-tasks/structured-agent-session-child-work-legacy'
 import { structuredRunningChildWork } from '../../../../../shared/agent-status/child-work/agent-child-work-listing'
@@ -24,6 +27,19 @@ import type {
 } from '../../host/structured-agent-session-host-types'
 import { structuredAgentSessionConversationFence } from '../../host/structured-agent-session-provider-child'
 import { HISTORY_PAGE_CONTENT_BUDGET_BYTES } from '../history/agent-session-history-page-bounds'
+
+/** Mark the commands whose output file the provider found; the rows offer to open only these. */
+function withReadableOutput(
+  tasks: AgentSessionBackgroundTask[] | undefined,
+  readable: ReadonlySet<string> | undefined
+): AgentSessionBackgroundTask[] | undefined {
+  if (!tasks || !readable?.size) {
+    return tasks
+  }
+  return tasks.map((task) =>
+    task.kind === 'command' && readable.has(task.id) ? { ...task, outputReadable: true } : task
+  )
+}
 
 /** Derive modern/legacy rosters from child records; null hides the strip only when no known/unlisted work remains. */
 export class StructuredAgentSessionBackgroundTaskChannel {
@@ -148,7 +164,10 @@ export class StructuredAgentSessionBackgroundTaskChannel {
       return null
     }
     const stops = this.deps.adapter.backgroundTaskStops?.(sessionId)
-    const { tasks, settledTasks } = structuredChildWorkLegacyTasks(views, session.params.provider)
+    const legacy = structuredChildWorkLegacyTasks(views, session.params.provider)
+    const readable = this.deps.adapter.commandOutputs?.readable(sessionId)
+    const tasks = withReadableOutput(legacy.tasks, readable)
+    const settledTasks = withReadableOutput(legacy.settledTasks, readable)
     return {
       state: 'monitoring',
       ...(tasks ? { tasks } : {}),

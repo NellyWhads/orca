@@ -146,6 +146,14 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
   backgroundTaskStops: NonNullable<Adapter['backgroundTaskStops']> = (sessionId) =>
     this.liveOwnerOrNull(sessionId)?.backgroundTaskStops?.(sessionId)
 
+  // Only a live child knows where its output goes; other providers and released sessions have none.
+  commandOutputs: NonNullable<Adapter['commandOutputs']> = {
+    readable: (sessionId) => this.liveOwnerOrNull(sessionId)?.commandOutputs?.readable(sessionId),
+    read: (input) =>
+      this.liveOwnerOrNull(input.sessionId)?.commandOutputs?.read(input) ??
+      Promise.resolve({ status: 'unavailable' })
+  }
+
   holdsDispatch = (sessionId: string): boolean =>
     this.liveOwnerOrNull(sessionId)?.holdsDispatch?.(sessionId) ?? false
 

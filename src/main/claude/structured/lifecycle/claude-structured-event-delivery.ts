@@ -33,9 +33,11 @@ export function emitClaudeStructuredSessionEvent({
     session?.delivery.dispose()
     session?.childWork.clear()
     session?.backgroundTasks.clear()
+    session?.commandOutput.clear()
   } else if (event.type === 'message') {
     session?.childWork.observe(event.message, session.translator?.childToolOwner)
     session?.backgroundTasks.observe(event.message, event.startsTurn === true)
+    session?.commandOutput.observe(event.message)
   } else if (event.type === 'prompt-cancelled') {
     // Clear waiting before journaling cancellation so status cannot wait on a closed card.
     publishChildWork(event.sessionId, session)

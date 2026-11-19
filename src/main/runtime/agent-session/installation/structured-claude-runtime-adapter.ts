@@ -38,6 +38,7 @@ export type StructuredClaudeRuntimeAdapterDeps = {
   onLifecycleEvent: (event: StructuredAgentSessionLifecycleEvent) => void
   onDispatchSettledLate?: ClaudeStructuredSessionAdapterDeps['onDispatchSettledLate']
   onChildWorkEvidence?: ClaudeStructuredSessionAdapterDeps['onChildWorkEvidence']
+  onBackgroundTasksChanged?: ClaudeStructuredSessionAdapterDeps['onBackgroundTasksChanged']
   logger?: ClaudeStructuredSessionAdapterDeps['logger']
 }
 
@@ -137,6 +138,9 @@ export function createStructuredClaudeRuntimeAdapter(
     },
     ...(deps.onDispatchSettledLate ? { onDispatchSettledLate: deps.onDispatchSettledLate } : {}),
     ...(deps.onChildWorkEvidence ? { onChildWorkEvidence: deps.onChildWorkEvidence } : {}),
+    ...(deps.onBackgroundTasksChanged
+      ? { onBackgroundTasksChanged: deps.onBackgroundTasksChanged }
+      : {}),
     ...(deps.logger ? { logger: deps.logger } : {}),
     ...openClaudeConnectionOf(deps),
     ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {})

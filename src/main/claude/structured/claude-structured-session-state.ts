@@ -21,6 +21,7 @@ import { cancelProcessAcquisition } from '@orca/process-host/cancel-process-acqu
 import type { AgentSessionFastModeState } from '../../../shared/agent-session/agent-session-wire'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import type { ClaudeBackgroundTaskTracker } from '../background-tasks/claude-background-task-tracker'
+import type { ClaudeCommandOutputLocator } from '../background-tasks/command-output/claude-command-output-locator'
 import type { ClaudeChildWorkDecoder } from '../child-work/claude-child-work-decoder'
 import type { ClaudeSlashCommandCatalog } from '../command-catalog/claude-slash-command-catalog'
 import type { ClaudeAtRestCommandCatalog } from '../command-catalog/claude-at-rest-commands'
@@ -59,6 +60,8 @@ export type ClaudeStructuredSessionAdapterDeps = {
     evidence: AgentChildWorkEvidence[],
     producer?: StructuredAgentSessionChildWorkProducer
   ) => void
+  /** The set of background tasks with readable output changed; an empty child-work batch republishes the roster. */
+  onBackgroundTasksChanged?: (sessionId: string) => void
   openConnection?: typeof openClaudeStreamJsonConnection
   readProcessStartTime?: (pid: number) => Promise<number | null>
   mintLinkId?: () => string
@@ -156,6 +159,8 @@ export type ClaudeSession = {
   /** CLI-advertised protocol capabilities from init; gates interrupt-receipt handling. */
   capabilities: readonly string[]
   backgroundTasks: ClaudeBackgroundTaskTracker
+  /** Where this child streams shell output, for the live command views. */
+  commandOutput: ClaudeCommandOutputLocator
   childWork: ClaudeChildWorkDecoder
   /** Commands seeded by init and updated by later init or commands_changed frames. */
   commands: ClaudeSlashCommandCatalog

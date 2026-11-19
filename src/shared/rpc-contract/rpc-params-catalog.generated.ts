@@ -598,6 +598,7 @@ import {
 } from './linear/linear-params'
 import { CreateProject } from './linear/linear-project-create-params'
 import { LinkPreviewGetParams } from './link-preview/link-preview-params'
+import { ReadCommandOutputParams } from './native-chat/agent-session-command-output-params'
 import { NativeChatSession, NativeChatUnsubscribe } from './native-chat/native-chat-params'
 import {
   NotificationGetMissedSinceParams,
@@ -1111,6 +1112,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.queuedMessageSend': QueuedMessageActionParams,
   'agentSession.queuedMessageUpdate': QueuedMessageUpdateParams,
   'agentSession.queuedMessagesResume': QueuedMessagesResumeParams,
+  'agentSession.readCommandOutput': ReadCommandOutputParams,
   'agentSession.readVisual': ReadVisualParams,
   'agentSession.regenerateName': OptionsParams,
   'agentSession.release': HoldParams,

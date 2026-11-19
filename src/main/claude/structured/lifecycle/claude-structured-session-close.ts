@@ -141,6 +141,7 @@ async function finalizeClaudePublishedSession(
   // Closing the session does not prove an outcome for unfinished child work.
   session.childWork.clear()
   session.backgroundTasks.clear()
+  session.commandOutput.clear()
   // Finalize before saving the resume point; persistence failure cannot undo a proven exit.
   session.closeFinalized = true
   input.sessions.delete(input.sessionId)
