@@ -1,4 +1,4 @@
-// Each foreground tail's stream outlives its row, so a row the list remounts comes back at the same height and content.
+// A tail's stream outlives its row, so a row the list remounts returns at the same height and content.
 
 import { useEffect, useLayoutEffect, useRef, useSyncExternalStore } from 'react'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'

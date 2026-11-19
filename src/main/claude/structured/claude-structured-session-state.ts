@@ -60,7 +60,7 @@ export type ClaudeStructuredSessionAdapterDeps = {
     evidence: AgentChildWorkEvidence[],
     producer?: StructuredAgentSessionChildWorkProducer
   ) => void
-  /** The set of background tasks with readable output changed; an empty child-work batch republishes the roster. */
+  /** The set of background tasks with readable output changed; the host republishes only the roster. */
   onBackgroundTasksChanged?: (sessionId: string) => void
   openConnection?: typeof openClaudeStreamJsonConnection
   readProcessStartTime?: (pid: number) => Promise<number | null>

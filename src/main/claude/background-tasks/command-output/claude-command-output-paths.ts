@@ -1,4 +1,4 @@
-// Claude Code's internal <tmp root>/<bucket>/<session>/tasks/<task>.output layout (2.1.326); a miss is "no output".
+// Claude Code's internal <tmp>/<bucket>/<session>/tasks/<task>.output layout (2.1.326); a miss is no output.
 
 import { lstat, readdir, realpath } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, sep } from 'node:path'

@@ -1,8 +1,7 @@
 import { z } from 'zod'
 import { SessionId } from '../structured-agent-session/structured-agent-session-identifiers'
 
-// Read a running shell command's output on its owning host. Clients name the task, never a path:
-// the host resolves the file itself, so a client cannot steer it to read anything else.
+// Clients name a task or call, never a path, so they cannot steer the host to read another file.
 
 /** Provider task ids and tool-call ids are short opaque tokens; anything else is refused. */
 const CommandOutputId = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/)
@@ -24,22 +23,21 @@ export const ReadCommandOutputParams = z
 
 export type AgentSessionReadCommandOutputParams = z.infer<typeof ReadCommandOutputParams>
 
-/**
- * `unavailable`: this host cannot show the command's output (other agents, older or remote layouts, a file Claude
- * Code never wrote). `pending`: a known command whose output has not appeared yet; poll again.
- * `output`: bytes from `offset`, which is where the next read starts. `ended` says the command finished; once
- * `more` is false too, nothing further will arrive. `reset` means the file shrank and the text restarts it;
- * `skippedBytes` counts older output left out of a first read of a long file.
- */
 export type AgentSessionReadCommandOutputResult =
+  /** This host cannot show it: another agent, an unknown layout, or a file Claude Code never wrote. */
   | { status: 'unavailable' }
+  /** A known command whose output has not appeared yet; poll again. */
   | { status: 'pending' }
   | {
       status: 'output'
       text: string
+      /** Where the next read starts. */
       offset: number
+      /** The command finished; once `more` is false too, nothing further will arrive. */
       ended: boolean
       more: boolean
+      /** Output left out: older history on a first read, or a backlog a fast writer built up. */
       skippedBytes?: number
+      /** The file shrank or was replaced; the text starts it over. */
       reset?: true
     }

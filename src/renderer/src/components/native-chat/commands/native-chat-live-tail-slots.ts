@@ -1,4 +1,4 @@
-// At most a few inline terminals at once, held only by tails on screen with output; the rest wait in claim order.
+// A few inline terminals at most, held only by tails on screen with output; others wait in claim order.
 
 import { useEffect, useSyncExternalStore } from 'react'
 

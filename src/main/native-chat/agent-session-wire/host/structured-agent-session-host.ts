@@ -59,7 +59,8 @@ export class StructuredAgentSessionHost {
   private readonly lifetime: HostTypes.StructuredAgentSessionConversationLifetime
   private readonly conversationDelivery: conversation.StructuredAgentSessionConversationDelivery
   private readonly eventRecovery: EventRecovery
-  private readonly backgroundTasks: BackgroundTasks
+  /** The roster channel; providers republish it when what they can show changes. */
+  readonly backgroundTasks: BackgroundTasks
   readonly restartResume: StructuredAgentSessionRestartResume
 
   readonly usageLimitContinue: ReturnType<typeof usageLimit.start>

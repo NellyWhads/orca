@@ -150,8 +150,7 @@ function createClaudeAdapter(
     logger: deps.logger,
     onChildWorkEvidence: (sessionId, evidence, producer) =>
       host()?.publishChildWorkEvidence(sessionId, evidence, producer),
-    // An empty batch changes no child record; it only re-derives and republishes the roster.
-    onBackgroundTasksChanged: (sessionId) => host()?.publishChildWorkEvidence(sessionId, []),
+    onBackgroundTasksChanged: (sessionId) => host()?.backgroundTasks.publish(sessionId),
     onDispatchSettledLate: followUps.onDispatchSettledLate,
     ...(deps.openClaudeConnection ? { openClaudeConnection: deps.openClaudeConnection } : {}),
     ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {})
