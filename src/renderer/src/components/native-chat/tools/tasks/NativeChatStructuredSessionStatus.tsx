@@ -19,6 +19,11 @@ import type { StructuredSessionBackgroundTasksView } from '../../../../../../sha
 import { useStructuredSessionChildRowContext } from './use-structured-session-child-row-context'
 import type { StructuredSessionTaskStop } from './use-structured-session-task-stop'
 import { openNativeChatSubagent } from '../../subagents/native-chat-open-subagent'
+import { useNativeChatCommandOutputScope } from '../../commands/native-chat-command-output-context'
+import {
+  closeNativeChatCommand,
+  useNativeChatOpenCommand
+} from '../../commands/native-chat-open-command'
 import {
   NativeChatCrewContext,
   useNativeChatCrew
@@ -59,6 +64,14 @@ export function NativeChatStructuredSessionStatus(props: {
     props.isVisible && props.backgroundTasks.show && Boolean(props.backgroundTasks.children?.length)
   )
   const { backgroundTasks, stop } = props
+  const commandOutput = useNativeChatCommandOutputScope()
+  const openCommand = useNativeChatOpenCommand(props.paneKey)
+  // An agent's view replaces an open command view, so it closes first.
+  const showAgent = (providerId: string): void => {
+    closeNativeChatCommand(props.paneKey)
+    openNativeChatSubagent(props.paneKey, providerId)
+  }
+  const currentAgentId = openCommand ? null : (props.currentAgentId ?? null)
 
   const target = props.target ?? LOCAL
   const ownerActionsAvailable = target.kind === 'local'
@@ -211,8 +224,8 @@ export function NativeChatStructuredSessionStatus(props: {
         expanded={expandedHere}
         onExpandedChange={(value) => setExpanded({ sessionId: props.sessionId, expanded: value })}
         onStop={stop.onStop}
-        currentAgentId={props.currentAgentId ?? null}
-        onShowAgent={(providerId) => openNativeChatSubagent(props.paneKey, providerId)}
+        currentAgentId={currentAgentId}
+        onShowAgent={showAgent}
         crew={crew}
       />
     )
@@ -245,9 +258,12 @@ export function NativeChatStructuredSessionStatus(props: {
           setExpanded({ sessionId: props.sessionId, expanded: value })
         }}
         onStop={stop.onStop}
-        currentAgentId={props.currentAgentId ?? null}
-        onShowAgent={(providerId) => openNativeChatSubagent(props.paneKey, providerId)}
+        currentAgentId={currentAgentId}
+        onShowAgent={showAgent}
         onShowProviderDetails={(row, opener) => setProviderDetails({ row, opener })}
+        {...(commandOutput
+          ? { commands: { readable: commandOutput.readable, onShow: commandOutput.open } }
+          : {})}
       />
       {providerDetails ? (
         <Suspense fallback={null}>

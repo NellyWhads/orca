@@ -14,6 +14,15 @@ import {
   useNativeChatOpenSubagent,
   type NativeChatSubagentView
 } from './native-chat-open-subagent'
+import {
+  closeNativeChatCommand,
+  nativeChatCommandSubjectKey,
+  useNativeChatOpenCommand
+} from '../commands/native-chat-open-command'
+import { useNativeChatCommandOutputScope } from '../commands/native-chat-command-output-context'
+import { NativeChatCommandView } from '../commands/NativeChatCommandView'
+import { closeOpenNativeChatCommandOnEscape } from '../commands/native-chat-command-escape'
+import { NativeChatLiveTailVisibleContext } from '../commands/native-chat-live-tail-visibility'
 
 /** What took the reader into a subagent, to hand focus back to: its roster entry, its strip row, else the composer. */
 function returnFocusTarget(main: HTMLElement, agentId: string): HTMLElement | null {
@@ -55,10 +64,31 @@ export function NativeChatSubagentTranscripts({
     [open, openId, paneKey]
   )
   const isVisible = props.isVisible ?? true
+  const command = useNativeChatOpenCommand(paneKey)
+  const commandOutput = useNativeChatCommandOutputScope()
+  const commandTask =
+    command && 'taskId' in command.subject
+      ? commandOutput?.readable.get(command.subject.taskId)
+      : undefined
+  const commandShown = command !== null && commandOutput !== null
+  // The roster may drop a finished command while its view is open; the row's words stay its title.
+  const commandLabel = commandTask?.description ?? commandTask?.name ?? command?.label ?? ''
   const slackPeople = useMemo(() => slackPeopleOf(props.session.messages), [props.session.messages])
   const mainRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<HTMLDivElement>(null)
   const shownView = useCallback(() => viewRef.current, [])
+  const commandViewRef = useRef<HTMLDivElement>(null)
+  const commandKey = command ? nativeChatCommandSubjectKey(command.subject) : null
+  useEffect(() => {
+    // The control that opened the view may sit in a layer it hid; take focus it dropped, so Esc works.
+    const active = document.activeElement
+    if (
+      commandKey !== null &&
+      (active === null || active === document.body || active.closest('[inert]') !== null)
+    ) {
+      commandViewRef.current?.focus({ preventScroll: true })
+    }
+  }, [commandKey])
   const shownId = shown?.agentId ?? null
   const previousIdRef = useRef<string | null>(null)
   useEffect(() => {
@@ -89,17 +119,21 @@ export function NativeChatSubagentTranscripts({
       <div className="relative flex min-h-0 flex-1 flex-col">
         <div
           ref={mainRef}
-          className={cn('flex min-h-0 flex-1 flex-col', shown && 'invisible')}
-          inert={shown !== null}
+          className={cn('flex min-h-0 flex-1 flex-col', (shown || commandShown) && 'invisible')}
+          inert={shown !== null || commandShown}
         >
           <NativeChatSlackPeopleContext value={slackPeople}>
             {/* A view opened over an open image viewer takes the focus the viewer gives up. */}
             <NativeChatGalleryCoveredFocusContext value={shownView}>
-              <NativeChatMessageList
-                {...props}
-                isVisible={isVisible && shown === null}
-                subagentView={main}
-              />
+              <NativeChatLiveTailVisibleContext
+                value={isVisible && shown === null && !commandShown}
+              >
+                <NativeChatMessageList
+                  {...props}
+                  isVisible={isVisible && shown === null && !commandShown}
+                  subagentView={main}
+                />
+              </NativeChatLiveTailVisibleContext>
             </NativeChatGalleryCoveredFocusContext>
           </NativeChatSlackPeopleContext>
         </div>
@@ -107,28 +141,54 @@ export function NativeChatSubagentTranscripts({
           <div
             ref={viewRef}
             tabIndex={-1}
-            className="absolute inset-0 flex flex-col focus:outline-none"
+            className={cn(
+              'absolute inset-0 flex flex-col focus:outline-none',
+              commandShown && 'invisible'
+            )}
+            inert={commandShown}
           >
-            {/* `/btw` forks from the conversation, never from a subagent's rows. */}
-            <NativeChatSideChatForkPointContext value={undefined}>
-              {/* The conversation's waiting mail draws in the conversation, not in a subagent's rows. */}
-              <NativeChatWaitingAgentMailRowsContext value={null}>
-                <NativeChatMessageList
-                  key={shown.agentId}
-                  session={props.session}
-                  journalItems={props.journalItems}
-                  journalSubmissions={props.journalSubmissions}
-                  journalLatestTurn={props.journalLatestTurn}
-                  subagentRoster={props.subagentRoster}
-                  subagentView={shown}
-                  isVisible={isVisible}
-                  isWorking={false}
-                  expandSignal={props.expandSignal}
-                  structuredAttachments={props.structuredAttachments}
-                  runtimeContext={props.runtimeContext}
-                />
-              </NativeChatWaitingAgentMailRowsContext>
-            </NativeChatSideChatForkPointContext>
+            <NativeChatLiveTailVisibleContext value={isVisible && !commandShown}>
+              {/* `/btw` forks from the conversation, never from a subagent's rows. */}
+              <NativeChatSideChatForkPointContext value={undefined}>
+                {/* The conversation's waiting mail draws in the conversation, not in a subagent's rows. */}
+                <NativeChatWaitingAgentMailRowsContext value={null}>
+                  <NativeChatMessageList
+                    key={shown.agentId}
+                    session={props.session}
+                    journalItems={props.journalItems}
+                    journalSubmissions={props.journalSubmissions}
+                    journalLatestTurn={props.journalLatestTurn}
+                    subagentRoster={props.subagentRoster}
+                    subagentView={shown}
+                    isVisible={isVisible && !commandShown}
+                    isWorking={false}
+                    expandSignal={props.expandSignal}
+                    structuredAttachments={props.structuredAttachments}
+                    runtimeContext={props.runtimeContext}
+                  />
+                </NativeChatWaitingAgentMailRowsContext>
+              </NativeChatSideChatForkPointContext>
+            </NativeChatLiveTailVisibleContext>
+          </div>
+        ) : null}
+        {commandShown ? (
+          // Above a subagent's view too: Back returns to whichever view opened the command.
+          <div
+            ref={commandViewRef}
+            tabIndex={-1}
+            className="absolute inset-0 flex flex-col focus:outline-none"
+            // The view owns its Esc: the pane's handler sits behind the chat root's input routing.
+            onKeyDown={(event) => closeOpenNativeChatCommandOnEscape(event, paneKey)}
+          >
+            <NativeChatCommandView
+              key={nativeChatCommandSubjectKey(command.subject)}
+              target={commandOutput.target}
+              sessionId={commandOutput.sessionId}
+              subject={command.subject}
+              label={commandLabel}
+              isVisible={isVisible}
+              onEscape={() => closeNativeChatCommand(paneKey)}
+            />
           </div>
         ) : null}
       </div>

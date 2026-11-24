@@ -51,7 +51,8 @@ import { claudePromptCancelRoute } from './journal/claude-structured-prompt-repl
 import { claudeForkForRewind } from '../transcripts/claude-rewind-fork'
 import { copyClaudeConversation } from '../transcripts/claude-conversation-copy'
 import { ClaudeConversationNaming } from '../conversation-naming/claude-conversation-naming'
-import { syncClaudePromptSuggestionPause } from './claude-prompt-suggestion-pause'
+import { noteClaudePromptSuggestionInterest } from './claude-prompt-suggestion-pause'
+import { claudeCommandOutputs } from './claude-structured-command-output'
 
 export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAdapter {
   private readonly sessions = new Map<string, ClaudeSession>()
@@ -127,17 +128,8 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     })
   }
 
-  promptSuggestionInterestChanged(sessionId: string, wanted: boolean): void {
-    if (wanted) {
-      this.suggestionReaders.add(sessionId)
-    } else {
-      this.suggestionReaders.delete(sessionId)
-    }
-    const session = this.sessions.get(sessionId)
-    if (session) {
-      syncClaudePromptSuggestionPause(session, wanted)
-    }
-  }
+  promptSuggestionInterestChanged = (sessionId: string, wanted: boolean): void =>
+    noteClaudePromptSuggestionInterest(this.suggestionReaders, this.sessions, sessionId, wanted)
 
   /** Await exit publication after cleanup/cursor writes; unproven exits stay indexed for retry. */
   drainObservedExits = (): Promise<void> => drainClaudeObservedExits(this.exits)
@@ -208,6 +200,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     })
   backgroundTaskStops = (sessionId: string) =>
     this.sessions.has(sessionId) ? { supportsTaskStop: true, supportsStopAll: true } : undefined
+  commandOutputs = claudeCommandOutputs(this.sessions)
   readCommands: NonNullable<StructuredAgentSessionAdapter['readCommands']> = (sessionId) =>
     this.sessions.get(sessionId)?.commands.commands
   manageMcp: NonNullable<StructuredAgentSessionAdapter['manageMcp']> = (record, operation) =>

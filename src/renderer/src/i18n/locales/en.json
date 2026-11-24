@@ -21695,7 +21695,8 @@
         "needsAttention_other": "{{count}} need attention",
         "workerBadge": "Worker",
         "subagentBadge": "Subagent",
-        "nameInMessage": "Add {{name}} to message"
+        "nameInMessage": "Add {{name}} to message",
+        "openCommandOutput": "Show output of {{value0}}"
       },
       "jumpToLatest": "Jump to latest",
       "newRowsAnnouncement": "New messages arrived while you were away",
@@ -22952,6 +22953,18 @@
         "sampleCall": "Sample call",
         "sampleNote": "Starts a real run",
         "send": "Send"
+      },
+      "commandOutput": {
+        "unavailable": "Live output isn’t available for this command.",
+        "waiting": "Waiting for output…",
+        "endedForeground": "The command finished; its output is in the conversation.",
+        "empty": "The command printed nothing.",
+        "readOnly": "Read-only",
+        "skipped": "Showing the latest output; earlier lines are not shown.",
+        "label": "Output of {{value0}}",
+        "tailStopped": "Live output is no longer available.",
+        "showLive": "Show live output",
+        "liveLabel": "Live output of {{value0}}"
       }
     },
     "tab": {

@@ -176,7 +176,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
   const pageBot = useBotForWorkspace(ownerWorktreeId ?? null)
   const botServerDown = pageBot !== null && hostOutage !== null && hostOutage.kind !== 'stopped'
   const subagents = useStructuredNativeChatSubagents({ ...props, paneKey, controller })
-  const subagentOpen = subagents.openId !== null
+  const subagentOpen = subagents.viewOpen
   // A subagent's view takes the composer's place; the main agent's prompts still show.
   const composerShown =
     (prompt === null || promptsUnanswerable) &&
@@ -256,7 +256,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
     hostNotice: botServerDown ? null : hostNotice,
     kickoffSignIn: bot.signInOwed
   })
-  return (
+  return subagents.provideCommandOutput(
     <NativeChatAntigravityAuthProvider target={install.antigravityAuth}>
       <NativeChatSlackMirrorContext.Provider value={slackMirror}>
         <NativeChatCrewContext.Provider value={crew}>

@@ -15,6 +15,7 @@ import {
   stopSessionRoute,
   type SessionRoute
 } from './structured-agent-session-acquisition-route'
+import { routedCommandOutputs } from './structured-agent-session-command-output-route'
 
 export class StructuredAgentSessionAdapterRouter implements Adapter {
   private readonly routes = new Map<string, SessionRoute>()
@@ -145,6 +146,8 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
 
   backgroundTaskStops: NonNullable<Adapter['backgroundTaskStops']> = (sessionId) =>
     this.liveOwnerOrNull(sessionId)?.backgroundTaskStops?.(sessionId)
+
+  commandOutputs = routedCommandOutputs((sessionId) => this.liveOwnerOrNull(sessionId))
 
   holdsDispatch = (sessionId: string): boolean =>
     this.liveOwnerOrNull(sessionId)?.holdsDispatch?.(sessionId) ?? false

@@ -152,6 +152,7 @@ function createClaudeAdapter(
     logger: deps.logger,
     onChildWorkEvidence: (sessionId, evidence, producer) =>
       host()?.publishChildWorkEvidence(sessionId, evidence, producer),
+    onBackgroundTasksChanged: (sessionId) => host()?.publishBackgroundTasks(sessionId),
     onDispatchSettledLate: followUps.onDispatchSettledLate,
     onUserRenamed: nameChatFromClaudeRename({
       naming: deps.conversationNaming,

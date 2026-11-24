@@ -26,6 +26,24 @@ export function syncClaudePromptSuggestionPause(
   void session.connection.setPromptSuggestionsPaused?.(!wanted).catch(() => {})
 }
 
+/** Record whether a reader shows this session's suggestions, and pause or resume its live process to match. */
+export function noteClaudePromptSuggestionInterest(
+  readers: Set<string>,
+  sessions: ReadonlyMap<string, ClaudePausableSession>,
+  sessionId: string,
+  wanted: boolean
+): void {
+  if (wanted) {
+    readers.add(sessionId)
+  } else {
+    readers.delete(sessionId)
+  }
+  const session = sessions.get(sessionId)
+  if (session) {
+    syncClaudePromptSuggestionPause(session, wanted)
+  }
+}
+
 /** Once initialize has answered, so the CLI already runs with suggestions on. */
 export function readyClaudePromptSuggestionPause(
   session: ClaudePausableSession,

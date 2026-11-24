@@ -1,0 +1,165 @@
+// Claude Code's internal <tmp>/<bucket>/<session>/tasks/<task>.output layout (2.1.326); a miss is no output.
+
+import { lstat, readdir, realpath } from 'node:fs/promises'
+import { basename, dirname, isAbsolute, join, sep } from 'node:path'
+
+/** Claude Code's task ids and tool-call ids; anything else never names a file. */
+const COMMAND_OUTPUT_ID = /^[A-Za-z0-9_-]{1,128}$/
+// Claude Code cuts a longer encoded cwd to 200 characters and appends a hash of the full path.
+const CLAUDE_BUCKET_NAME_MAX_LENGTH = 200
+
+export function isClaudeCommandOutputId(value: unknown): value is string {
+  return typeof value === 'string' && COMMAND_OUTPUT_ID.test(value)
+}
+
+export type ClaudeCommandOutputRootInput = {
+  /** The launch environment's CLAUDE_CODE_TMPDIR, when the child was given one. */
+  tmpDir?: string
+  platform?: NodeJS.Platform
+  uid?: number
+}
+
+/** Real path of `claude-<uid>` under Claude Code's tmp base; null on Windows, whose layout was not measured. */
+export async function claudeCommandOutputRoot(
+  input: ClaudeCommandOutputRootInput
+): Promise<string | null> {
+  const platform = input.platform ?? process.platform
+  const uid = input.uid ?? process.getuid?.()
+  if (platform === 'win32' || uid === undefined) {
+    return null
+  }
+  const base = input.tmpDir && isAbsolute(input.tmpDir) ? input.tmpDir : '/tmp'
+  const root = join(base, `claude-${uid}`)
+  try {
+    // /tmp is shared: trust only a real folder this user owns, as Claude Code creates it.
+    const stats = await lstat(root)
+    if (!stats.isDirectory() || stats.uid !== uid) {
+      return null
+    }
+    return await realpath(root)
+  } catch {
+    return null
+  }
+}
+
+/** Same bucket rule as Claude Code's project folders: one dash per non-alphanumeric character. */
+function encodeClaudeBucketName(cwd: string): string {
+  return cwd.replace(/[^a-zA-Z0-9]/g, '-')
+}
+
+/** Candidate `tasks` folders computed from the launch cwd; a long cwd matches its hashed bucket by prefix. */
+export async function computedClaudeTaskDirs(
+  root: string,
+  cwd: string,
+  providerSessionId: string
+): Promise<string[]> {
+  if (!isClaudeSessionIdSegment(providerSessionId)) {
+    return []
+  }
+  const cwds = new Set([cwd])
+  try {
+    cwds.add(await realpath(cwd))
+  } catch {
+    // A vanished cwd keeps only its launch spelling.
+  }
+  const dirs: string[] = []
+  let entries: string[] | null = null
+  for (const candidate of cwds) {
+    const encoded = encodeClaudeBucketName(candidate)
+    if (encoded.length <= CLAUDE_BUCKET_NAME_MAX_LENGTH) {
+      dirs.push(join(root, encoded, providerSessionId, 'tasks'))
+      continue
+    }
+    entries ??= await readdir(root).catch(() => [])
+    const prefix = `${encoded.slice(0, CLAUDE_BUCKET_NAME_MAX_LENGTH)}-`
+    for (const entry of entries) {
+      if (entry === encoded || entry.startsWith(prefix)) {
+        dirs.push(join(root, entry, providerSessionId, 'tasks'))
+      }
+    }
+  }
+  return dirs
+}
+
+function isClaudeSessionIdSegment(value: string): boolean {
+  return /^[A-Za-z0-9-]{1,128}$/.test(value)
+}
+
+/** Whether a path names `<taskId>.output` directly inside a folder called `tasks`. */
+export function isClaudeTaskOutputPathShape(path: string, taskId: string): boolean {
+  return (
+    isAbsolute(path) && basename(path) === `${taskId}.output` && basename(dirname(path)) === 'tasks'
+  )
+}
+
+/** Whether a `tasks` folder path has the shape Claude Code writes. */
+export function isClaudeTaskDirShape(path: string): boolean {
+  return isAbsolute(path) && basename(path) === 'tasks'
+}
+
+function isInside(root: string, path: string): boolean {
+  return path.startsWith(root.endsWith(sep) ? root : `${root}${sep}`)
+}
+
+/** A verified output file: its real path and the identity every later open must still match. */
+export type ClaudeTaskOutputFile = { path: string; dev: number; ino: number }
+
+/** The candidate, if it is a lone regular file (not a link, one name) whose real path stays inside the tmp root. */
+export async function verifiedClaudeTaskOutputFile(
+  root: string,
+  candidate: string,
+  taskId: string
+): Promise<ClaudeTaskOutputFile | null> {
+  if (!isClaudeTaskOutputPathShape(candidate, taskId)) {
+    return null
+  }
+  try {
+    const stats = await lstat(candidate)
+    // A second hard link could be a name for a file outside the root.
+    if (!stats.isFile() || stats.nlink !== 1) {
+      return null
+    }
+    const real = await realpath(candidate)
+    return isInside(root, real) && basename(real) === `${taskId}.output`
+      ? { path: real, dev: stats.dev, ino: stats.ino }
+      : null
+  } catch {
+    return null
+  }
+}
+
+/** The first candidate that verifies, else the first computed folder's file that does. */
+export async function findClaudeTaskOutputFile(input: {
+  root: string
+  taskId: string
+  candidates: readonly string[]
+  computedDirs: () => Promise<string[]>
+}): Promise<ClaudeTaskOutputFile | null> {
+  const { root, taskId } = input
+  for (const candidate of input.candidates) {
+    const file = await verifiedClaudeTaskOutputFile(root, candidate, taskId)
+    if (file) {
+      return file
+    }
+  }
+  for (const dir of await input.computedDirs()) {
+    const file = await verifiedClaudeTaskOutputFile(root, join(dir, `${taskId}.output`), taskId)
+    if (file) {
+      return file
+    }
+  }
+  return null
+}
+
+/** The folder's real path when it stays inside the tmp root. */
+export async function verifiedClaudeTaskDir(root: string, dir: string): Promise<string | null> {
+  if (!isClaudeTaskDirShape(dir)) {
+    return null
+  }
+  try {
+    const real = await realpath(dir)
+    return isInside(root, real) && basename(real) === 'tasks' ? real : null
+  } catch {
+    return null
+  }
+}

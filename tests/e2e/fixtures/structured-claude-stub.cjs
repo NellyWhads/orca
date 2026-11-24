@@ -2,6 +2,7 @@
 const { execFileSync } = require('node:child_process')
 const { randomUUID } = require('node:crypto')
 const fs = require('node:fs')
+const { runShellTaskTurn } = require('./structured-claude-shell-tasks.cjs')
 
 const [launchLog, ...args] = process.argv.slice(2)
 fs.appendFileSync(launchLog, `${JSON.stringify({ pid: process.pid, args })}\n`)
@@ -73,6 +74,9 @@ function startTurn(frame) {
   write({ ...frame, isReplay: true })
   runPromptCommands(promptText(frame.message))
   const prompt = JSON.stringify(frame.message ?? '')
+  if (runShellTaskTurn(prompt, sessionId, write)) {
+    return
+  }
   const slow = prompt.includes('slow')
   const pluginUi = prompt.includes('plugin-ui')
   if (prompt.includes('plugin-focus')) {

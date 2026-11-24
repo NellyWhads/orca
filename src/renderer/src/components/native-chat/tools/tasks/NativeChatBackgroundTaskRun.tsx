@@ -6,6 +6,8 @@ import type { NativeChatBackgroundTaskBlock } from '../../../../../../shared/nat
 import { nativeChatBackgroundTaskRun } from '../../../../../../shared/native-chat/transcript/turns/native-chat-background-task-run'
 import { sayBackgroundTaskTranslated } from './background-task-words-text'
 import { KIND_ICONS } from './background-task-kind-icons'
+import { useNativeChatCommandOutputScope } from '../../commands/native-chat-command-output-context'
+import { NativeChatEventOpenButton } from '../../messages/events/NativeChatEventOpenButton'
 
 export function NativeChatBackgroundTaskRun({
   block
@@ -18,6 +20,9 @@ export function NativeChatBackgroundTaskRun({
     nativeChatBackgroundTaskRun(block, sayBackgroundTaskTranslated)
   )
   const Icon = KIND_ICONS[row.kind]
+  const commandOutput = useNativeChatCommandOutputScope()
+  // Only a command whose host streams its output opens; any other row stays plain text.
+  const openable = commandOutput?.readable.has(block.taskId) === true
   return (
     <div className="min-w-0 py-0.5 font-sans text-sm leading-relaxed text-chat-foreground-faint">
       <div className="flex min-h-6 min-w-0 items-center gap-1.5">
@@ -29,6 +34,17 @@ export function NativeChatBackgroundTaskRun({
         <span className="ml-auto shrink-0 font-sans text-xs tabular-nums text-chat-foreground-faint">
           {row.status}
         </span>
+        {openable ? (
+          // The same open icon a subagent's status row carries, so an openable row reads as one at rest.
+          <NativeChatEventOpenButton
+            name={t(
+              'components.native-chat.backgroundTasks.openCommandOutput',
+              'Show output of {{value0}}',
+              { value0: row.label }
+            )}
+            onOpen={() => commandOutput?.open(block.taskId, row.label)}
+          />
+        ) : null}
       </div>
       {row.sentence === null ? null : (
         <p

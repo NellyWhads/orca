@@ -1,5 +1,5 @@
 // Chat Stop ends the captured child for every provider; default prompt Cancel interrupts its turn.
-
+import type { AgentSessionReadCommandOutputResult } from '../../../../shared/rpc-contract/native-chat/agent-session-command-output-params'
 import type {
   AgentChildWorkStopAcknowledgement,
   AgentSessionBackgroundTaskStops
@@ -39,6 +39,17 @@ export type AgentSessionCancelOutcome = {
 
 export type AgentSessionPromptCancelRoute = { kind: 'dismiss' } | { kind: 'stop' }
 
+export type StructuredAgentSessionCommandOutputs = {
+  /** Background tasks whose live output this host can read; undefined when none can be. */
+  readable(sessionId: string): ReadonlySet<string> | undefined
+  /** The next chunk of a shell command's output, named by task or by the tool call that runs it. */
+  read(input: {
+    sessionId: string
+    target: { taskId: string } | { toolUseId: string }
+    offset: number
+  }): Promise<AgentSessionReadCommandOutputResult>
+}
+
 export type StructuredAgentSessionAdapterStop = {
   /** Stop named tasks only; acknowledge each accepted stop immediately so later batch failures cannot erase it. */
   stopBackgroundTasks?(input: {
@@ -49,6 +60,8 @@ export type StructuredAgentSessionAdapterStop = {
   }): Promise<{ cancelled: boolean; stillRunning?: true }>
   /** Undefined when no live session exposes stop support. */
   backgroundTaskStops?(sessionId: string): AgentSessionBackgroundTaskStops | undefined
+  /** Live shell-command output; providers that cannot read it omit this. */
+  commandOutputs?: StructuredAgentSessionCommandOutputs
   /** Cancel only the requested turn; absent turnId also covers dispatches whose turns have not opened. */
   cancelTurn(input: {
     sessionId: string

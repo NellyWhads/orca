@@ -25,6 +25,8 @@ export type AgentSessionBackgroundTask = {
   totalTokens?: number
   /** Absent means stoppable for older hosts, which published only targetable tasks; unsupported targets explicitly send false. */
   stoppable?: boolean
+  /** The host can stream this command's live output (agentSession.readCommandOutput); absent means it cannot. */
+  outputReadable?: true
 }
 
 export type WorkerDockPresence = { revision: string; open: boolean }
@@ -59,7 +61,8 @@ function backgroundTaskFieldsEqual(
     left.state === right.state &&
     left.startedAt === right.startedAt &&
     left.totalTokens === right.totalTokens &&
-    left.stoppable === right.stoppable
+    left.stoppable === right.stoppable &&
+    left.outputReadable === right.outputReadable
   )
 }
 

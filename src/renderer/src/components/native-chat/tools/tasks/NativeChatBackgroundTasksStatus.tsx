@@ -18,6 +18,12 @@ import { useWorkerDockStructuralValue } from './dock/NativeChatWorkerDockFrame'
 import { WorkerDockRoster } from './dock/WorkerDockRoster'
 import type { WorkerDockRowView } from './dock/WorkerDockRow'
 
+/** Commands whose output the host streams open their own live view instead of the details dialog. */
+export type NativeChatStripCommandViews = {
+  readable: ReadonlyMap<string, unknown>
+  onShow: (taskId: string, label: string) => void
+}
+
 function workerChildren(row: AgentChildRowModel): AgentChildRowModel[] {
   return [row, ...row.owned.flatMap(workerChildren)]
 }
@@ -63,6 +69,7 @@ export function NativeChatBackgroundTasksStatus(liveProps: {
   onWorkerAction?: (row: WorkerDockRowView, action: 'stop' | 'clear') => void
   onClearAll?: () => void
   loadWindow?: (anchor: string) => Promise<void>
+  commands?: NativeChatStripCommandViews
 }): React.JSX.Element {
   const t = useTranslate()
   const props = useWorkerDockStructuralValue(liveProps)
@@ -207,6 +214,13 @@ export function NativeChatBackgroundTasksStatus(liveProps: {
       onOpen={(row, opener) => {
         if (row.kind === 'worker') {
           props.onOpenWorker?.(row, opener)
+        } else if (
+          row.kind === 'command' &&
+          row.providerId !== undefined &&
+          // Readability is live state, not structure a gesture holds.
+          liveProps.commands?.readable.has(row.providerId)
+        ) {
+          liveProps.commands.onShow(row.providerId, row.title)
         } else if (row.kind === 'command' || row.settlement) {
           props.onShowProviderDetails?.(row, opener)
         } else if (row.providerId) {
